@@ -33,7 +33,7 @@ export class BackendStack extends Stack {
       this,
       "knowledgeBase",
       {
-        embeddingsModel: bedrock.BedrockFoundationModel.TITAN_EMBED_TEXT_V1,
+        embeddingsModel: bedrock.BedrockFoundationModel.TITAN_EMBED_TEXT_V2_1024,
       }
     );
 

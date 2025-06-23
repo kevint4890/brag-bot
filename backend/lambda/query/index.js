@@ -17,6 +17,8 @@ exports.handler =
   .use(httpHeaderNormalizer())
   .handler(async (event, context) => {
     const { question, requestSessionId, modelId } = event.body;
+    //const modelArn = modelId ? `arn:aws:bedrock:${process.env.AWS_REGION}::foundation-model/${modelId}` : `arn:aws:bedrock:${process.env.AWS_REGION}::foundation-model/anthropic.claude-instant-v1`
+    const modelArn = "arn:aws:bedrock:us-east-2:684681096900:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
     try{
       console.log('model', modelId);
       const input = {
@@ -29,7 +31,7 @@ exports.handler =
           knowledgeBaseConfiguration: {
             knowledgeBaseId: process.env.KNOWLEDGE_BASE_ID,
             //Claude Instant v1.2 is a fast, affordable yet still very capable model, which can handle a range of tasks including casual dialogue, text analysis, summarization, and document question-answering.
-            modelArn: modelId ? `arn:aws:bedrock:${process.env.AWS_REGION}::foundation-model/${modelId}` : `arn:aws:bedrock:${process.env.AWS_REGION}::foundation-model/anthropic.claude-instant-v1`,
+            modelArn: modelArn, 
           },
         },
       };
