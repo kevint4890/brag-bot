@@ -208,7 +208,10 @@ export class BackendStack extends Stack {
       })
     );
 
-    const whitelistedIps = [Stack.of(this).node.tryGetContext("allowedip")];
+    const whitelistedIps = [
+      "98.46.0.0/16",  // Xfinity hotspot range for team
+    ];
+
 
     const apiGateway = new apigw.RestApi(this, "rag", {
       description: "API for RAG",
