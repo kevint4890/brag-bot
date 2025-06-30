@@ -20,7 +20,7 @@ exports.handler =
     const modelArn = inferenceProfileId ? `arn:aws:bedrock:${process.env.AWS_REGION}:684681096900:inference-profile/${inferenceProfileId}` : `arn:aws:bedrock:${process.env.AWS_REGION}::foundation-model/anthropic.claude-instant-v1`
     // const modelArn = "arn:aws:bedrock:us-east-2:684681096900:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
     try{
-      console.log('model', modelId);
+      console.log('model', inferenceProfileId);
       const input = {
         sessionId: requestSessionId,
         input: {
