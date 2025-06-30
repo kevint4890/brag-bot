@@ -1,6 +1,6 @@
 # WAF IP Management - Integrated with npm
 
-Automatic IP allowlist management for AWS WAF, seamlessly integrated into your development workflow. No more manual commands - just use `npm start` and your IP is automatically added to the WAF allowlist!
+Automatic IP allowlist management for AWS WAF, seamlessly integrated into your development workflow. No more manual commands - just use `npm run start` and your IP is automatically added to the WAF allowlist!
 
 ## 🚀 How It Works
 
@@ -43,7 +43,7 @@ npm install
 ### Starting Development
 ```bash
 cd frontend
-npm start
+npm run start
 ```
 
 **What happens:**
@@ -75,7 +75,7 @@ npm run stop
 
 ## 🔧 Configuration
 
-The system is pre-configured for your environment:
+The system is pre-configured, here is the current configurement:
 
 ```javascript
 // frontend/scripts/manage-ip.js
@@ -84,7 +84,7 @@ const CONFIG = {
   AWS_REGION: 'us-east-2',
   DYNAMODB_TABLE: 'waf-ip-tracking',
   EXPIRATION_HOURS: 8,
-  MAX_IPS_PER_DEVELOPER: 3
+  MAX_IPS_PER_DEVELOPER: 2
 };
 ```
 
@@ -92,7 +92,7 @@ const CONFIG = {
 
 - **8-hour auto-expiration** - IPs automatically removed after 8 hours
 - **Individual IP tracking** - Only your specific IP is added (no subnets)
-- **Rate limiting** - Maximum 3 active IPs per developer
+- **Rate limiting** - Maximum 2 active IPs per developer
 - **Private IP blocking** - Won't add internal/private IP addresses
 - **Automatic cleanup** - Hourly Lambda removes expired IPs
 
@@ -148,7 +148,7 @@ Starting the development server...
 ### Rate Limit Reached
 ```
 🔍 Checking IP access...
-⚠️ Maximum of 3 IPs already active for john-developer
+⚠️ Maximum of 2 IPs already active for john-developer
 ℹ Some IPs will expire automatically, or use npm run stop to clean up
 ```
 
