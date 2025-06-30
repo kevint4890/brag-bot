@@ -196,8 +196,8 @@ export class BackendStack extends Stack {
 
     // Schedule cleanup Lambda to run every hour
     const cleanupRule = new events.Rule(this, "WafCleanupRule", {
-      schedule: events.Schedule.rate(Duration.hours(1)),
-      description: "Trigger WAF IP cleanup every hour",
+      schedule: events.Schedule.rate(Duration.minutes(15)),
+      description: "Trigger WAF IPs cleanup every 15 minutes",
     });
 
     cleanupRule.addTarget(new targets.LambdaFunction(wafCleanupLambda));

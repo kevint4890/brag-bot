@@ -1,13 +1,14 @@
-const AWS = require('aws-sdk');
-
-// Initialize AWS services
-const dynamodb = new AWS.DynamoDB();
-const wafv2 = new AWS.WAFV2();
+const { WAFV2Client, ListIPSetsCommand, GetIPSetCommand, UpdateIPSetCommand } = require('@aws-sdk/client-wafv2');
+const { DynamoDBClient, ScanCommand, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
 
 // Configuration
 const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE || 'waf-ip-tracking';
 const WAF_IP_SET_NAME = process.env.WAF_IP_SET_NAME || 'DevIpSet-V3WSsqmnoVlU';
 const AWS_REGION = process.env.AWS_REGION || 'us-east-2';
+
+// Initialize AWS clients
+const wafv2Client = new WAFV2Client({ region: AWS_REGION });
+const dynamodbClient = new DynamoDBClient({ region: AWS_REGION });
 
 /**
  * Lambda handler for cleaning up expired IPs from WAF and DynamoDB
@@ -73,17 +74,17 @@ exports.handler = async (event) => {
  * Get expired IPs from DynamoDB
  */
 async function getExpiredIPs(currentTime) {
-    const params = {
+    const command = new ScanCommand({
         TableName: DYNAMODB_TABLE,
         FilterExpression: 'expiration_time <= :currentTime',
         ExpressionAttributeValues: {
             ':currentTime': { N: currentTime.toString() }
         },
         ProjectionExpression: 'ip_address, expiration_time, developer_name'
-    };
+    });
     
     try {
-        const result = await dynamodb.scan(params).promise();
+        const result = await dynamodbClient.send(command);
         
         return result.Items.map(item => ({
             ip: item.ip_address.S,
@@ -103,11 +104,12 @@ async function getExpiredIPs(currentTime) {
 async function getWAFIPSet() {
     try {
         // First, get the IP Set ID
-        const listParams = {
-            Scope: 'REGIONAL'
-        };
+        const listCommand = new ListIPSetsCommand({
+            Scope: 'REGIONAL',
+            Limit: 100
+        });
         
-        const ipSets = await wafv2.listIPSets(listParams).promise();
+        const ipSets = await wafv2Client.send(listCommand);
         const targetIPSet = ipSets.IPSets.find(ipSet => ipSet.Name === WAF_IP_SET_NAME);
         
         if (!targetIPSet) {
@@ -115,12 +117,13 @@ async function getWAFIPSet() {
         }
         
         // Get detailed IP Set information
-        const getParams = {
+        const getCommand = new GetIPSetCommand({
             Scope: 'REGIONAL',
-            Id: targetIPSet.Id
-        };
+            Id: targetIPSet.Id,
+            Name: WAF_IP_SET_NAME
+        });
         
-        const ipSetDetails = await wafv2.getIPSet(getParams).promise();
+        const ipSetDetails = await wafv2Client.send(getCommand);
         
         return {
             id: targetIPSet.Id,
@@ -151,15 +154,16 @@ async function removeIPsFromWAF(expiredIPs, ipSetInfo) {
     
     // Only update if there are changes
     if (updatedAddresses.length !== ipSetInfo.addresses.length) {
-        const updateParams = {
+        const updateCommand = new UpdateIPSetCommand({
             Scope: 'REGIONAL',
             Id: ipSetInfo.id,
+            Name: WAF_IP_SET_NAME,
             Addresses: updatedAddresses,
             LockToken: ipSetInfo.lockToken
-        };
+        });
         
         try {
-            await wafv2.updateIPSet(updateParams).promise();
+            await wafv2Client.send(updateCommand);
             console.log('Successfully updated WAF IP Set');
         } catch (error) {
             console.error('Error updating WAF IP Set:', error);
@@ -177,15 +181,15 @@ async function removeIPsFromWAF(expiredIPs, ipSetInfo) {
  */
 async function removeExpiredRecords(expiredIPs) {
     const deletePromises = expiredIPs.map(async (item) => {
-        const params = {
+        const command = new DeleteItemCommand({
             TableName: DYNAMODB_TABLE,
             Key: {
                 ip_address: { S: item.ip }
             }
-        };
+        });
         
         try {
-            await dynamodb.deleteItem(params).promise();
+            await dynamodbClient.send(command);
             console.log(`Removed expired record for IP: ${item.ip} (developer: ${item.developer})`);
         } catch (error) {
             console.error(`Error removing record for IP ${item.ip}:`, error);
