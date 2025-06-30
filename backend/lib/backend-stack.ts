@@ -21,6 +21,7 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import * as cr from "aws-cdk-lib/custom-resources";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import { join } from "path";
 
 export class BackendStack extends Stack {
@@ -153,6 +154,53 @@ export class BackendStack extends Stack {
     });
 
     rule.addTarget(new targets.LambdaFunction(lambdaCrawlJob));
+
+    /** DynamoDB table for WAF IP tracking */
+    const wafIpTrackingTable = new dynamodb.Table(this, "WafIpTrackingTable", {
+      tableName: "waf-ip-tracking",
+      partitionKey: {
+        name: "ip_address",
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: RemovalPolicy.DESTROY,
+      pointInTimeRecovery: true,
+    });
+
+    /** Lambda function for WAF IP cleanup */
+    const wafCleanupLambda = new NodejsFunction(this, "WafCleanupLambda", {
+      runtime: Runtime.NODEJS_18_X,
+      entry: join(__dirname, "../lambda/waf-cleanup/index.js"),
+      functionName: "waf-ip-cleanup",
+      timeout: Duration.minutes(5),
+      environment: {
+        DYNAMODB_TABLE: wafIpTrackingTable.tableName,
+        WAF_IP_SET_NAME: "DevIpSet-V3WSsqmnoVlU",
+        // AWS_REGION is automatically provided by Lambda runtime
+      },
+    });
+
+    // Grant permissions to the cleanup Lambda
+    wafIpTrackingTable.grantReadWriteData(wafCleanupLambda);
+    
+    wafCleanupLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "wafv2:GetIPSet",
+          "wafv2:UpdateIPSet",
+          "wafv2:ListIPSets",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Schedule cleanup Lambda to run every hour
+    const cleanupRule = new events.Rule(this, "WafCleanupRule", {
+      schedule: events.Schedule.rate(Duration.hours(1)),
+      description: "Trigger WAF IP cleanup every hour",
+    });
+
+    cleanupRule.addTarget(new targets.LambdaFunction(wafCleanupLambda));
 
     /** Lambda to update the list of seed urls in Web crawler data source*/
 
