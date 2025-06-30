@@ -12,10 +12,16 @@
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {
+    "@aws-sdk/client-wafv2": "^3.600.0",
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-sts": "^3.600.0",
+    "chalk": "^4.1.2",
     "react-scripts": "5.0.1"
   },
   "scripts": {
+    "prestart": "node scripts/manage-ip.js add",
     "start": "react-scripts start",
+    "stop": "node scripts/manage-ip.js remove",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

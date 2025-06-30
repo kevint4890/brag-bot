@@ -13,7 +13,7 @@ import OutlinedInput from "@mui/material/OutlinedInput";
 import PropTypes from "prop-types";
 
 export const QAHeader = (props) => {
-  const { setSelectedModel, setBaseUrl, modelList, selectedModel, baseUrl } =
+  const { setSelectedModel, setBaseUrl, inferenceProfileSummaries, selectedModel, baseUrl } =
     props;
   const [url, setUrl] = useState(baseUrl ?? "");
   const modelListDisabledText =
@@ -78,17 +78,17 @@ export const QAHeader = (props) => {
       </Alert>
       <br></br>
       <Box sx={{ paddingBottom: "20px" }}>
-        <Tooltip title={modelList.length === 0 ? modelListDisabledText : null}>
+        <Tooltip title={inferenceProfileSummaries.length === 0 ? modelListDisabledText : null}>
           <Autocomplete
             disabled={!baseUrl}
             includeInputInList
             id="model-select"
             autoComplete
-            options={modelList}
-            getOptionLabel={(option) => option.modelId ?? option}
+            options={inferenceProfileSummaries}
+            getOptionLabel={(option) => option.inferenceProfileId ?? option}
             renderOption={(props, option) => (
               <Typography {...props} variant="standard">
-                {option.modelName} : {option.modelId}{" "}
+                {option.inferenceProfileName} : {option.inferenceProfileId}{" "}
               </Typography>
             )}
             sx={{ width: "100%" }}
@@ -96,7 +96,7 @@ export const QAHeader = (props) => {
               <TextField {...params} label="Choose a Model" />
             )}
             defaultValue={null}
-            value={selectedModel?.modelId ?? null}
+            value={selectedModel?.inferenceProfileId ?? null}
             onChange={(event, value) => {
               setSelectedModel(value);
             }}
@@ -110,13 +110,13 @@ export const QAHeader = (props) => {
 QAHeader.propTypes = {
   setSelectedModel: PropTypes.func.isRequired,
   setBaseUrl: PropTypes.func.isRequired,
-  modelList: PropTypes.array,
+  inferenceProfileSummaries: PropTypes.array,
   selectedModel: PropTypes.string,
   baseUrl: PropTypes.string,
 };
 
 QAHeader.defaultProps = {
-  modelList: [],
+  inferenceProfileSummaries: [],
   selectedModel: null,
   baseUrl: "",
 };
