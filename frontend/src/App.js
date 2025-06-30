@@ -12,7 +12,8 @@ import LoadingSpinner from "./Spinner";
 import IconButton from "@mui/material/IconButton";
 import SendIcon from "@mui/icons-material/Send";
 import UrlSourcesForm from "./WebUrlsForm";
-import {modelList} from "./RAGModels"
+// import {modelList} from "./RAGModels"
+import {inferenceProfileSummaries} from "./InferenceProfileSummaries"
 
 const App = (props) => {
   const [history, setHistory] = useState([]);
@@ -67,7 +68,7 @@ const App = (props) => {
       body: JSON.stringify({
         requestSessionId: sessionId,
         question: question,
-        modelId: selectedModel?.modelId,
+        inferenceProfileId: selectedModel?.inferenceProfileId,
       }),
     })
       .then((res) => res.json())
@@ -168,7 +169,7 @@ const App = (props) => {
           <QAHeader
             setBaseUrl={setBaseUrl}
             baseUrl={baseUrl}
-            modelList={modelList}
+            inferenceProfileSummaries={inferenceProfileSummaries}
             setSelectedModel={handleChangeModel}
             selectedModel={selectedModel}
           />
