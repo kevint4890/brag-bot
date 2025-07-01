@@ -2,7 +2,6 @@ import {
   Box,
   Typography,
   Avatar,
-  Fade,
   Chip,
   Grow,
   Paper,
@@ -18,7 +17,6 @@ import {
 } from "@mui/material";
 import React, { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
-import PersonIcon from "@mui/icons-material/Person";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import FindInPageIcon from "@mui/icons-material/FindInPage";
 import LinkIcon from "@mui/icons-material/Link";
@@ -30,7 +28,8 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { IconButton } from "@mui/material";
-import './animations.css';
+import '../../animations.css';
+import { useResponsiveHeight, getResponsiveSpacing } from "../../hooks/useResponsiveHeight";
 
 const TypingIndicator = () => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -57,12 +56,14 @@ const Chat = (props) => {
   const history = props.history;
   const onOpenSourcePanel = props.onOpenSourcePanel;
   const boxRef = useRef(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [feedbackStates, setFeedbackStates] = useState({});
   const [detailedFeedback, setDetailedFeedback] = useState({});
   const [feedbackSubmitting, setFeedbackSubmitting] = useState({});
   const [expandedErrors, setExpandedErrors] = useState({});
   const [closingFeedback, setClosingFeedback] = useState({});
+
+  // Responsive height detection
+  const heightTier = useResponsiveHeight();
 
   // Format timestamp to 12-hour format
   const formatTimestamp = (timestamp) => {
@@ -239,7 +240,6 @@ const Chat = (props) => {
     setFeedbackSubmitting(prev => ({ ...prev, [index]: true }));
 
     try {
-      // TODO: Replace with actual API call
       const feedbackData = {
         messageIndex: index,
         question: message.question,
@@ -247,13 +247,34 @@ const Chat = (props) => {
         feedbackType: feedback.type,
         category: feedback.category,
         comment: feedback.comment,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        sessionId: message.sessionId || 'unknown'
       };
 
-      console.log('Submitting detailed feedback:', feedbackData);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Try to submit feedback to API endpoint if available
+      try {
+        const baseUrl = window.location.origin.includes('localhost') 
+          ? 'https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/' 
+          : window.location.origin + '/api/';
+          
+        await fetch(baseUrl + 'feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(feedbackData),
+        });
+        
+        console.log('Feedback submitted successfully:', feedbackData);
+      } catch (apiError) {
+        // Fallback: Log to console if API is not available
+        console.log('API not available, logging feedback locally:', feedbackData);
+        
+        // Store feedback in localStorage as fallback
+        const existingFeedback = JSON.parse(localStorage.getItem('chatFeedback') || '[]');
+        existingFeedback.push(feedbackData);
+        localStorage.setItem('chatFeedback', JSON.stringify(existingFeedback));
+      }
 
       // Mark as submitted
       setDetailedFeedback(prev => ({
@@ -300,17 +321,34 @@ const Chat = (props) => {
       sx={{
         height: "100%",
         overflowY: "auto",
-        padding: "24px",
+        overflowX: "hidden",
+        padding: getResponsiveSpacing(heightTier, {
+          xs: "12px",
+          small: "16px",
+          medium: "20px",
+          large: "24px"
+        }),
         background: "linear-gradient(to bottom, #eff6ff, #ffffff)",
         display: "flex",
         flexDirection: "column",
         scrollBehavior: "smooth",
         flex: 1,
         minHeight: 0,
+        maxHeight: "100%",
+        boxSizing: "border-box",
       }}
     >
       {history?.length > 0 ? (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        <Box sx={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: getResponsiveSpacing(heightTier, {
+            xs: "12px",
+            small: "16px",
+            medium: "20px",
+            large: "24px"
+          })
+        }}>
           {history?.map((msg, index) => (
             <Grow 
               in={true} 
@@ -834,8 +872,13 @@ const Chat = (props) => {
             alignItems: "center",
             height: "100%",
             textAlign: "center",
-            padding: { xs: "20px 16px", sm: "32px 20px", md: "40px 20px" },
-            minHeight: "300px",
+            padding: getResponsiveSpacing(heightTier, {
+              xs: "12px 8px",
+              small: "16px 12px",
+              medium: "24px 16px",
+              large: "32px 20px"
+            }),
+            minHeight: heightTier === 'xs' ? "200px" : "300px",
             animation: "fadeInUp 0.8s ease-out",
             "@keyframes fadeInUp": {
               "0%": { 
@@ -852,23 +895,24 @@ const Chat = (props) => {
           <Paper
             elevation={0}
             sx={{
-              padding: { 
-                xs: "32px 24px", 
-                sm: "40px 32px", 
-                md: "48px 40px" 
-              },
-              borderRadius: { xs: "20px", sm: "24px" },
+              padding: getResponsiveSpacing(heightTier, {
+                xs: "16px 12px",
+                small: "24px 18px",
+                medium: "32px 24px",
+                large: "40px 32px"
+              }),
+              borderRadius: heightTier === 'xs' ? "16px" : { xs: "20px", sm: "24px" },
               background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.95) 100%)",
               backdropFilter: "blur(10px)",
               border: "1px solid rgba(59, 130, 246, 0.08)",
-              maxWidth: { xs: "90%", sm: "85%", md: "500px" },
+              maxWidth: { xs: "95%", sm: "90%", md: "500px" },
               width: "100%",
               position: "relative",
               overflow: "hidden",
               transition: "all 0.4s ease",
-              animation: "float 6s ease-in-out infinite",
+              animation: heightTier === 'xs' ? "none" : "float 6s ease-in-out infinite",
               "&:hover": {
-                transform: "translateY(-8px)",
+                transform: heightTier === 'xs' ? "none" : "translateY(-8px)",
                 boxShadow: "0 20px 40px rgba(59, 130, 246, 0.12)",
                 border: "1px solid rgba(59, 130, 246, 0.15)",
               },
@@ -895,17 +939,32 @@ const Chat = (props) => {
               {/* Enhanced Icon with Background */}
               <Box
                 sx={{
-                  width: "88px",
-                  height: "88px",
+                  width: getResponsiveSpacing(heightTier, {
+                    xs: "60px",
+                    small: "70px",
+                    medium: "80px",
+                    large: "88px"
+                  }),
+                  height: getResponsiveSpacing(heightTier, {
+                    xs: "60px",
+                    small: "70px",
+                    medium: "80px",
+                    large: "88px"
+                  }),
                   borderRadius: "50%",
                   background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  margin: "0 auto 32px",
+                  margin: getResponsiveSpacing(heightTier, {
+                    xs: "0 auto 16px",
+                    small: "0 auto 20px",
+                    medium: "0 auto 28px",
+                    large: "0 auto 32px"
+                  }),
                   boxShadow: "0 8px 24px rgba(59, 130, 246, 0.25)",
                   position: "relative",
-                  animation: "iconPulse 4s ease-in-out infinite",
+                  animation: heightTier === 'xs' ? "none" : "iconPulse 4s ease-in-out infinite",
                   "&::after": {
                     content: '""',
                     position: "absolute",
@@ -916,7 +975,7 @@ const Chat = (props) => {
                     borderRadius: "50%",
                     background: "linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(29, 78, 216, 0.2) 100%)",
                     zIndex: -1,
-                    animation: "iconGlow 4s ease-in-out infinite",
+                    animation: heightTier === 'xs' ? "none" : "iconGlow 4s ease-in-out infinite",
                   },
                   "@keyframes iconPulse": {
                     "0%, 100%": { transform: "scale(1)" },
@@ -930,7 +989,12 @@ const Chat = (props) => {
               >
                 <FindInPageIcon 
                   sx={{ 
-                    fontSize: 40, 
+                    fontSize: getResponsiveSpacing(heightTier, {
+                      xs: 28,
+                      small: 32,
+                      medium: 36,
+                      large: 40
+                    }), 
                     color: "white",
                     filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1))",
                   }} 
@@ -946,9 +1010,19 @@ const Chat = (props) => {
                   backgroundClip: "text",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
-                  marginBottom: "12px",
+                  marginBottom: getResponsiveSpacing(heightTier, {
+                    xs: "8px",
+                    small: "10px",
+                    medium: "12px",
+                    large: "12px"
+                  }),
                   letterSpacing: "-0.02em",
-                  fontSize: { xs: "1.75rem", sm: "2rem" },
+                  fontSize: getResponsiveSpacing(heightTier, {
+                    xs: "1.5rem",
+                    small: "1.6rem",
+                    medium: "1.75rem",
+                    large: "2rem"
+                  }),
                 }}
               >
                 Find What You Need
@@ -960,8 +1034,18 @@ const Chat = (props) => {
                 sx={{ 
                   color: "#3b82f6",
                   fontWeight: "600",
-                  marginBottom: "20px",
-                  fontSize: "1rem",
+                  marginBottom: getResponsiveSpacing(heightTier, {
+                    xs: "12px",
+                    small: "16px",
+                    medium: "18px",
+                    large: "20px"
+                  }),
+                  fontSize: getResponsiveSpacing(heightTier, {
+                    xs: "0.9rem",
+                    small: "0.95rem",
+                    medium: "1rem",
+                    large: "1rem"
+                  }),
                   letterSpacing: "0.01em",
                 }}
               >
@@ -974,13 +1058,31 @@ const Chat = (props) => {
                 sx={{ 
                   color: "#64748b",
                   lineHeight: 1.7,
-                  fontSize: "15px",
-                  marginBottom: "28px",
-                  maxWidth: "420px",
-                  margin: "0 auto 28px",
+                  fontSize: getResponsiveSpacing(heightTier, {
+                    xs: "13px",
+                    small: "14px",
+                    medium: "15px",
+                    large: "15px"
+                  }),
+                  marginBottom: getResponsiveSpacing(heightTier, {
+                    xs: "16px",
+                    small: "20px",
+                    medium: "24px",
+                    large: "28px"
+                  }),
+                  maxWidth: heightTier === 'xs' ? "300px" : "420px",
+                  margin: `0 auto ${getResponsiveSpacing(heightTier, {
+                    xs: "16px",
+                    small: "20px",
+                    medium: "24px",
+                    large: "28px"
+                  })}`,
                 }}
               >
-                Search through company documentation, policies, and procedures. Ask questions naturally and get reliable answers from our secure knowledge base.
+                {heightTier === 'xs' 
+                  ? "Ask questions and get reliable answers from our knowledge base."
+                  : "Search through company documentation, policies, and procedures. Ask questions naturally and get reliable answers from our secure knowledge base."
+                }
               </Typography>
             </Box>
           </Paper>

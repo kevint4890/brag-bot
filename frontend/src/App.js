@@ -1,27 +1,22 @@
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import { QAHeader } from "./QAHeader";
-import Chat from "./Chat";
-import { useState, useEffect } from "react";
-import { TextField, Typography, Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
+import Chat from "./components/chat/Chat";
+import { useState, useEffect, useRef } from "react";
+import { Typography, Button, Popover, Switch } from "@mui/material";
 import * as React from "react";
-import Divider from "@mui/material/Divider";
-import Button from "@mui/material/Button";
-import AddIcon from "@mui/icons-material/Add";
-import Switch from "@mui/material/Switch";
-import LoadingSpinner from "./Spinner";
-import IconButton from "@mui/material/IconButton";
-import SendIcon from "@mui/icons-material/Send";
+import SettingsIcon from "@mui/icons-material/Settings";
 import UrlSourcesForm from "./WebUrlsForm";
 import {inferenceProfileSummaries} from "./InferenceProfileSummaries";
-import Popover from "@mui/material/Popover";
-import Snackbar from "@mui/material/Snackbar";
-import Alert from "@mui/material/Alert";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import SettingsIcon from "@mui/icons-material/Settings";
-import ChatIcon from "@mui/icons-material/Chat";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import FlashOnIcon from "@mui/icons-material/FlashOn";
+import { useResponsiveHeight, useResponsiveLayout, getResponsiveSpacing } from "./hooks/useResponsiveHeight";
+import ResizeHandle from "./components/ui/ResizeHandle";
+import FullScreenSourceModal from "./components/modals/FullScreenSourceModal";
+import ChatHeader from "./components/chat/ChatHeader";
+import ChatInput from "./components/chat/ChatInput";
+import SourcePanel from "./components/panels/SourcePanel";
+import FloatingActionButtons from "./components/ui/FloatingActionButtons";
+import NewChatConfirmation from "./components/ui/NewChatConfirmation";
+import NotificationSnackbars from "./components/ui/NotificationSnackbars";
 
 const App = (props) => {
   const [history, setHistory] = useState([]);
@@ -36,14 +31,49 @@ const App = (props) => {
     seedUrlList: [],
   });
   const [hasWebDataSource, setHasWebDataSource] = useState(false);
-  const [showDevSettings, setShowDevSettings] = useState(false);
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const [devSettingsAnchor, setDevSettingsAnchor] = useState(null);
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [sourcePanel, setSourcePanel] = useState({ isOpen: false, content: null, title: null });
   const [enableSourcePanel, setEnableSourcePanel] = useState(true);
-  const [showHeaderImage, setShowHeaderImage] = useState(false);
+  const [enableSidebarSlider, setEnableSidebarSlider] = useState(() => {
+    const saved = localStorage.getItem('enableSidebarSlider');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  // Reset sidebar to default size when slider is disabled
+  useEffect(() => {
+    if (!enableSidebarSlider) {
+      setSidebarWidth(55); // Reset to default 55%
+      localStorage.setItem('sidebarWidth', '55');
+    }
+  }, [enableSidebarSlider]);
   const [showQuickConfigSnackbar, setShowQuickConfigSnackbar] = useState(false);
+
+  // New state for sidebar resizing and mobile handling
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebarWidth');
+    return saved ? parseFloat(saved) : 55;
+  });
+  const [fullScreenSource, setFullScreenSource] = useState({ 
+    isOpen: false, 
+    content: null, 
+    url: null, 
+    title: null 
+  });
+  const [sourceBehavior, setSourceBehavior] = useState(() => {
+    const saved = localStorage.getItem('sourceBehavior');
+    return saved || 'smart'; // 'smart', 'sidebar', 'newTab'
+  });
+  
+  // Animation state to prevent text reflow during transitions
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [fixedChatWidth, setFixedChatWidth] = useState(null);
+  const chatContainerRef = useRef(null);
+
+  // Responsive layout detection
+  const layout = useResponsiveLayout();
+  const heightTier = useResponsiveHeight();
 
   useEffect(() => {
     if (!baseUrl) {
@@ -204,11 +234,47 @@ const App = (props) => {
     setSessionId(undefined)
   }
 
+  // Smart source handling based on screen size and user preference
   const handleOpenSourcePanel = (citation) => {
     // Extract URL from citation if it contains one
     const urlMatch = citation.match(/https?:\/\/[^\s]+/);
     const url = urlMatch ? urlMatch[0] : null;
     
+    // Determine how to handle the source based on responsive layout and user preference
+    const shouldUseSidebar = layout.shouldUseSidebar && sourceBehavior !== 'newTab';
+    const forceNewTab = sourceBehavior === 'newTab' || !layout.shouldUseSidebar;
+    
+    if (forceNewTab && url) {
+      // Open in new tab for mobile or when user prefers new tabs
+      window.open(url, '_blank');
+      return;
+    }
+    
+    if (!layout.shouldUseSidebar && sourceBehavior === 'smart') {
+      // Use full-screen modal for mobile when no URL or user prefers integrated experience
+      setFullScreenSource({
+        isOpen: true,
+        content: citation,
+        url: url,
+        title: url ? 'Source Document' : 'Source Content'
+      });
+      return;
+    }
+    
+    // Capture current chat width before opening sidebar to prevent text reflow
+    if (chatContainerRef.current && !sourcePanel.isOpen) {
+      const currentWidth = chatContainerRef.current.offsetWidth;
+      setFixedChatWidth(currentWidth);
+      setIsAnimating(true);
+      
+      // Clear fixed width after animation completes
+      setTimeout(() => {
+        setFixedChatWidth(null);
+        setIsAnimating(false);
+      }, 250); // Match animation duration
+    }
+    
+    // Use sidebar for desktop
     setSourcePanel({
       isOpen: true,
       content: citation,
@@ -218,8 +284,53 @@ const App = (props) => {
   };
 
   const handleCloseSourcePanel = () => {
+    // Capture current chat width before closing sidebar to prevent text reflow
+    if (chatContainerRef.current && sourcePanel.isOpen) {
+      const currentWidth = chatContainerRef.current.offsetWidth;
+      setFixedChatWidth(currentWidth);
+      setIsAnimating(true);
+      
+      // Clear fixed width after animation completes
+      setTimeout(() => {
+        setFixedChatWidth(null);
+        setIsAnimating(false);
+      }, 250); // Match animation duration
+    }
+    
     setSourcePanel({ isOpen: false, content: null, title: null });
   };
+
+  const handleCloseFullScreenSource = () => {
+    setFullScreenSource({ isOpen: false, content: null, url: null, title: null });
+  };
+
+  // Handle sidebar resizing
+  const handleSidebarResize = (deltaPercent) => {
+    const newWidth = Math.max(20, Math.min(70, sidebarWidth + deltaPercent));
+    setSidebarWidth(newWidth);
+    localStorage.setItem('sidebarWidth', newWidth.toString());
+  };
+
+  // Handle source behavior change
+  const handleSourceBehaviorChange = (newBehavior) => {
+    setSourceBehavior(newBehavior);
+    localStorage.setItem('sourceBehavior', newBehavior);
+  };
+
+  // Get responsive spacing values
+  const containerPadding = getResponsiveSpacing(heightTier, {
+    xs: "4px",
+    small: "8px", 
+    medium: "16px",
+    large: "24px"
+  });
+
+  const containerHeight = getResponsiveSpacing(heightTier, {
+    xs: "calc(100vh - 16px)",
+    small: "calc(100vh - 24px)",
+    medium: "calc(100vh - 40px)", 
+    large: "calc(100vh - 48px)"
+  });
 
   return (
     <Box
@@ -229,9 +340,10 @@ const App = (props) => {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: { xs: "16px", sm: "20px", md: "24px" },
+        padding: containerPadding,
         position: "relative",
         overflow: "hidden",
+        boxSizing: "border-box",
         "&::before": {
           content: '""',
           position: "absolute",
@@ -253,67 +365,25 @@ const App = (props) => {
         },
       }}
     >
-      {/* Header */}
-      {showHeaderImage && (
-        <Box
-          sx={{
-            textAlign: "center",
-            marginBottom: { xs: "24px", sm: "32px", md: "36px" },
-            marginTop: { xs: "8px", sm: "10px", md: "12px" },
-            zIndex: 1,
-            animation: "slideInDown 0.8s ease-out",
-            "@keyframes slideInDown": {
-              "0%": { transform: "translateY(-50px)", opacity: 0 },
-              "100%": { transform: "translateY(0)", opacity: 1 },
-            },
-            "@keyframes glowAnimation": {
-              "0%": { filter: "drop-shadow(0 0 5px rgba(255, 193, 7, 0.2))" },
-              "50%": { filter: "drop-shadow(0 0 20px rgba(255, 193, 7, 0.4))" },
-              "100%": { filter: "drop-shadow(0 0 5px rgba(255, 193, 7, 0.2))" },
-            }
-          }}
-        >
-          <Box
-            component="img"
-            src={"/brag-logo-new.png"}
-            alt="BRAG Logo"
-            sx={{
-              width: { xs: "200px", sm: "240px", md: "280px" },
-              maxWidth: "90vw",
-              height: "auto",
-              animation: "glowAnimation 3s ease-in-out infinite",
-              transition: "transform 0.3s ease",
-              "&:hover": {
-                transform: "scale(1.05)",
-              }
-            }}
-          />
-        </Box>
-      )}
 
       {/* Main Content Container */}
       <Box
         sx={{
           width: "100%",
           maxWidth: sourcePanel.isOpen ? "95vw" : { xs: "95vw", sm: "90vw", md: "800px" },
-          height: showHeaderImage ? "calc(100vh - 320px)" : "calc(100vh - 120px)",
-          minHeight: "400px",
-          maxHeight: showHeaderImage ? "calc(100vh - 320px)" : "calc(100vh - 120px)",
+          height: containerHeight,
+          minHeight: heightTier === 'xs' ? "300px" : "400px",
           display: "flex",
-          gap: sourcePanel.isOpen ? "16px" : 0,
-          zIndex: 1,
+          gap: sourcePanel.isOpen ? (heightTier === 'xs' ? "8px" : "16px") : 0,
           transition: "all 0.3s ease",
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
         }}
       >
         {/* Chat Container */}
         <Paper
+          ref={chatContainerRef}
           elevation={8}
           sx={{
-            width: sourcePanel.isOpen ? "60%" : "100%",
+            width: sourcePanel.isOpen ? `${100 - sidebarWidth}%` : "100%",
             height: "100%",
             display: "flex",
             flexDirection: "column",
@@ -322,83 +392,20 @@ const App = (props) => {
             background: "rgba(255, 255, 255, 0.95)",
             backdropFilter: "blur(10px)",
             border: "1px solid rgba(59, 130, 246, 0.1)",
-            animation: "slideInUp 0.8s ease-out 0.2s both",
-            transition: "all 0.3s ease",
+            position: "relative",
+            zIndex: 1,
+            transition: isAnimating ? "none" : "width 0.3s ease",
             "&:hover": {
               boxShadow: "0 12px 40px rgba(59, 130, 246, 0.15)",
-              transform: sourcePanel.isOpen ? "none" : "translateY(-4px)",
-            },
-            "@keyframes slideInUp": {
-              "0%": { transform: "translateY(50px)", opacity: 0 },
-              "100%": { transform: "translateY(0)", opacity: 1 },
             },
           }}
         >
-          {/* Chat Header */}
-          <Box
-            sx={{
-              background: "linear-gradient(90deg, #1e40af 0%, #3b82f6 100%)",
-              color: "white",
-              padding: "16px 24px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              position: "relative",
-              "&::after": {
-                content: '""',
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: "linear-gradient(90deg, transparent 0%, rgba(251, 191, 36, 0.1) 50%, transparent 100%)",
-                animation: "shimmer 3s ease-in-out infinite",
-              },
-              "@keyframes shimmer": {
-                "0%, 100%": { transform: "translateX(-100%)" },
-                "50%": { transform: "translateX(100%)" },
-              },
-            }}
-          >
-            <Box
-              component="img"
-              src="/chat-bubble-logo.png"
-              alt="Chat"
-              sx={{
-                height: "24px",
-                width: "auto",
-                zIndex: 1,
-                filter: "brightness(0) invert(1)",
-                opacity: 0.9,
-              }}
-            />
-            <Button
-              disabled={history.length === 0}
-              startIcon={<AddIcon />}
-              onClick={handleNewChatClick}
-              onDoubleClick={handleNewChatDoubleClick}
-              sx={{
-                color: "white",
-                borderColor: "rgba(255, 255, 255, 0.8)",
-                zIndex: 1,
-                transition: "all 0.3s ease",
-                "&:hover": {
-                  borderColor: "white",
-                  backgroundColor: "rgba(255, 255, 255, 0.15)",
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 4px 8px rgba(255, 255, 255, 0.2)",
-                },
-                "&:disabled": {
-                  borderColor: "rgba(255, 255, 255, 0.3)",
-                  color: "rgba(255, 255, 255, 0.5)",
-                },
-              }}
-              variant="outlined"
-              size="small"
-            >
-              New Chat
-            </Button>
-          </Box>
+          <ChatHeader
+            onNewChat={handleNewChatClick}
+            onNewChatDoubleClick={handleNewChatDoubleClick}
+            hasHistory={history.length > 0}
+            heightTier={heightTier}
+          />
 
           {/* Chat Messages Area */}
           <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -408,242 +415,45 @@ const App = (props) => {
             />
           </Box>
 
-          {/* Input Area */}
-          <Box
-            sx={{
-              padding: "16px 24px",
-              backgroundColor: "rgba(0, 0, 0, 0.02)",
-              borderTop: "1px solid rgba(59, 130, 246, 0.1)",
-            }}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                backgroundColor: "white",
-                borderRadius: "25px",
-                padding: "8px 16px",
-                boxShadow: "0 2px 12px rgba(59, 130, 246, 0.08)",
-                border: "1px solid rgba(59, 130, 246, 0.15)",
-              }}
-            >
-              <TextField
-                disabled={spinner || !baseUrl}
-                variant="standard"
-                placeholder={baseUrl ? "Type your message..." : "Please configure API settings first"}
-                value={question}
-                onChange={(e) => setQuestion(e.target?.value)}
-                onKeyDown={handleKeyDown}
-                multiline
-                maxRows={4}
-                sx={{
-                  flex: 1,
-                  "& .MuiInput-underline:before": { display: "none" },
-                  "& .MuiInput-underline:after": { display: "none" },
-                  "& .MuiInputBase-input": {
-                    padding: "8px 0",
-                    fontSize: "15px",
-                    color: "#374151",
-                    "&::placeholder": {
-                      color: "#9ca3af",
-                      opacity: 0.8,
-                    },
-                  },
-                }}
-              />
-              <IconButton
-                disabled={spinner || !baseUrl || !question.trim()}
-                onClick={handleSendQuestion}
-                sx={{
-                  backgroundColor: baseUrl && question.trim() ? "#3b82f6" : "rgba(0, 0, 0, 0.1)",
-                  color: "white",
-                  width: "36px",
-                  height: "36px",
-                  minWidth: "36px",
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    backgroundColor: baseUrl && question.trim() ? "#1d4ed8" : "rgba(0, 0, 0, 0.2)",
-                    transform: baseUrl && question.trim() ? "scale(1.05)" : "none",
-                    boxShadow: baseUrl && question.trim() ? "0 4px 12px rgba(59, 130, 246, 0.4)" : "none",
-                  },
-                  "&:disabled": {
-                    backgroundColor: "rgba(0, 0, 0, 0.1)",
-                    color: "rgba(0, 0, 0, 0.3)",
-                  },
-                  "&:active": {
-                    transform: baseUrl && question.trim() ? "scale(0.95)" : "none",
-                  },
-                }}
-              >
-                <SendIcon />
-              </IconButton>
-            </Box>
-          </Box>
+          <ChatInput
+            question={question}
+            setQuestion={setQuestion}
+            onSendQuestion={handleSendQuestion}
+            onKeyDown={handleKeyDown}
+            disabled={spinner}
+            baseUrl={baseUrl}
+            heightTier={heightTier}
+          />
         </Paper>
 
-        {/* Source Panel */}
-        {sourcePanel.isOpen && (
-          <Paper
-            elevation={8}
-            sx={{
-              width: "40%",
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              borderRadius: { xs: "16px", sm: "20px" },
-              overflow: "hidden",
-              background: "rgba(255, 255, 255, 0.95)",
-              backdropFilter: "blur(10px)",
-              border: "1px solid rgba(59, 130, 246, 0.1)",
-              animation: "slideInRight 0.3s ease-out",
-              "@keyframes slideInRight": {
-                "0%": { transform: "translateX(100%)", opacity: 0 },
-                "100%": { transform: "translateX(0)", opacity: 1 },
-              },
-            }}
-          >
-            {/* Source Panel Header */}
-            <Box
-              sx={{
-                background: "linear-gradient(90deg, #1e40af 0%, #3b82f6 100%)",
-                color: "white",
-                padding: "16px 24px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  fontWeight: "600",
-                  fontSize: "1.1rem",
-                  letterSpacing: "-0.01em",
-                  textShadow: "0 2px 4px rgba(0,0,0,0.2)",
-                }}
-              >
-                {sourcePanel.title}
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                {sourcePanel.url && (
-                  <IconButton
-                    onClick={() => window.open(sourcePanel.url, '_blank')}
-                    sx={{
-                      color: "white",
-                      "&:hover": {
-                        backgroundColor: "rgba(255, 255, 255, 0.15)",
-                      },
-                    }}
-                    title="Open in new tab"
-                  >
-                    <OpenInNewIcon sx={{ fontSize: "18px" }} />
-                  </IconButton>
-                )}
-                <IconButton
-                  onClick={handleCloseSourcePanel}
-                  sx={{
-                    color: "white",
-                    "&:hover": {
-                      backgroundColor: "rgba(255, 255, 255, 0.15)",
-                    },
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: "20px",
-                      height: "20px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "18px",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    ×
-                  </Box>
-                </IconButton>
-              </Box>
-            </Box>
-
-            {/* Source Panel Content */}
-            <Box
-              sx={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                background: "linear-gradient(to bottom, #eff6ff, #ffffff)",
-              }}
-            >
-              {sourcePanel.url ? (
-                <>
-                  {/* URL Display */}
-                  <Box sx={{ padding: "16px 24px", borderBottom: "1px solid rgba(0, 0, 0, 0.1)" }}>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontSize: "12px",
-                        color: "#6b7280",
-                        wordBreak: "break-all",
-                        backgroundColor: "rgba(0, 0, 0, 0.05)",
-                        padding: "8px 12px",
-                        borderRadius: "6px",
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {sourcePanel.url}
-                    </Typography>
-                  </Box>
-                  {/* Iframe */}
-                  <Box sx={{ flex: 1, position: "relative" }}>
-                    <Box
-                      component="iframe"
-                      src={sourcePanel.url}
-                      sx={{
-                        width: "100%",
-                        height: "100%",
-                        border: "none",
-                        backgroundColor: "white",
-                      }}
-                      onError={(e) => {
-                        console.log("Iframe failed to load:", e);
-                      }}
-                    />
-                  </Box>
-                </>
-              ) : (
-                /* Text Content */
-                <Box sx={{ padding: "24px", overflowY: "auto" }}>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      fontSize: "14px",
-                      lineHeight: 1.6,
-                      color: "#374151",
-                      wordBreak: "break-word",
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {sourcePanel.content}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          </Paper>
+        {/* Resize Handle */}
+        {sourcePanel.isOpen && layout.shouldUseSidebar && enableSidebarSlider && (
+          <ResizeHandle
+            onResize={handleSidebarResize}
+            isVisible={true}
+          />
         )}
+
+        <SourcePanel
+          isOpen={sourcePanel.isOpen}
+          content={sourcePanel.content}
+          title={sourcePanel.title}
+          url={sourcePanel.url}
+          sidebarWidth={sidebarWidth}
+          onClose={handleCloseSourcePanel}
+          heightTier={heightTier}
+        />
       </Box>
 
-      {/* Quick Access Button */}
-      <IconButton
-        onClick={() => {
+      <FloatingActionButtons
+        onQuickConfig={() => {
           const quickSetupUrl = "https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/";
           setBaseUrl(quickSetupUrl);
           
           // Find Claude 3.5 Sonnet model from inference profiles
           const claudeModel = inferenceProfileSummaries.find(model => 
             model.inferenceProfileId.includes('claude-3-5-sonnet') || 
-            model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('sonnet')
+            (model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('sonnet'))
           );
           
           if (claudeModel) {
@@ -653,55 +463,8 @@ const App = (props) => {
           // Show confirmation message
           setShowQuickConfigSnackbar(true);
         }}
-        sx={{
-          position: "fixed",
-          bottom: "20px",
-          right: "80px",
-          backgroundColor: "rgba(255, 255, 255, 0.9)",
-          backdropFilter: "blur(10px)",
-          borderRadius: "50%",
-          boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
-          border: "1px solid rgba(16, 185, 129, 0.2)",
-          zIndex: 2,
-          width: "48px",
-          height: "48px",
-          transition: "all 0.3s ease",
-          "&:hover": {
-            backgroundColor: "rgb(236, 255, 249)",
-            boxShadow: "0 4px 16px rgba(16, 185, 129, 0.4)",
-            transform: "translateY(-2px)",
-          },
-        }}
-        title="Quick Configure"
-      >
-        <FlashOnIcon sx={{ color: "rgba(16, 185, 129, 0.9)", fontSize: "20px" }} />
-      </IconButton>
-
-      {/* Developer Settings Button */}
-      <IconButton
-        onClick={(e) => setDevSettingsAnchor(e.currentTarget)}
-        sx={{
-          position: "fixed",
-          bottom: "20px",
-          right: "20px",
-          backgroundColor: "rgba(255, 255, 255, 0.9)",
-          backdropFilter: "blur(10px)",
-          borderRadius: "50%",
-          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-          border: "1px solid rgba(59, 130, 246, 0.1)",
-          zIndex: 2,
-          width: "48px",
-          height: "48px",
-          transition: "all 0.3s ease",
-          "&:hover": {
-            backgroundColor: "rgba(255, 255, 255, 1)",
-            boxShadow: "0 4px 16px rgba(59, 130, 246, 0.2)",
-            transform: "translateY(-2px)",
-          },
-        }}
-      >
-        <SettingsIcon sx={{ color: "#3b82f6", fontSize: "20px" }} />
-      </IconButton>
+        onOpenSettings={(e) => setDevSettingsAnchor(e.currentTarget)}
+      />
 
       {/* Developer Settings Popup */}
       <Popover
@@ -718,7 +481,12 @@ const App = (props) => {
         }}
         sx={{
           '& .MuiPopover-paper': {
-            borderRadius: '24px',
+            borderRadius: getResponsiveSpacing(heightTier, {
+              xs: '16px',
+              small: '20px',
+              medium: '24px',
+              large: '24px'
+            }),
             padding: '0',
             background: 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(20px) saturate(180%)',
@@ -730,9 +498,24 @@ const App = (props) => {
             `,
             border: '1px solid rgba(255, 255, 255, 0.4)',
             marginBottom: '8px',
-            maxWidth: '420px',
-            minWidth: '380px',
-            maxHeight: '80vh',
+            maxWidth: getResponsiveSpacing(heightTier, {
+              xs: '95vw',
+              small: '350px',
+              medium: '400px',
+              large: '420px'
+            }),
+            minWidth: getResponsiveSpacing(heightTier, {
+              xs: '280px',
+              small: '320px',
+              medium: '360px',
+              large: '380px'
+            }),
+            maxHeight: getResponsiveSpacing(heightTier, {
+              xs: '90vh',
+              small: '85vh',
+              medium: '80vh',
+              large: '80vh'
+            }),
             position: 'relative',
             overflow: 'hidden',
           }
@@ -810,7 +593,7 @@ const App = (props) => {
                 // Find Claude 3.5 Sonnet model from inference profiles
                 const claudeModel = inferenceProfileSummaries.find(model => 
                   model.inferenceProfileId.includes('claude-3-5-sonnet') || 
-                  model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('sonnet')
+                  (model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('sonnet'))
                 );
                 
                 if (claudeModel) {
@@ -852,10 +635,10 @@ const App = (props) => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.1)', marginBottom: '12px' }}>
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: '600', color: '#1e40af', marginBottom: '4px' }}>
-                  Source Panel (Experimental)
+                  📄 Source Documents Panel
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#6b7280', fontSize: '12px' }}>
-                  Open sources in a side panel instead of new tabs. S3 non-website documents currently do not work, but this is due to how S3 files are currently linked as a source. [ref GAI-38]
+                  When you click on source links in chat responses, open them in a side panel instead of new browser tabs. Makes it easier to reference sources while continuing your conversation.
                 </Typography>
               </Box>
               <Switch
@@ -873,30 +656,34 @@ const App = (props) => {
               />
             </Box>
 
-            {/* Header Image Toggle */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.1)' }}>
+            {/* Sidebar Slider Toggle */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: 'rgba(255, 193, 7, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 193, 7, 0.2)', marginBottom: '12px' }}>
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: '600', color: '#1e40af', marginBottom: '4px' }}>
-                  Show Header Logo
+                <Typography variant="body2" sx={{ fontWeight: '600', color: '#d97706', marginBottom: '4px' }}>
+                  ↔️ Resizable Panel (Experimental)
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#6b7280', fontSize: '12px' }}>
-                  Display the large logo at the top of the page.
+                  Add a draggable handle to resize the source panel width. Click and drag the thin line between panels to adjust. Note: Still in early stages, may lag or react unexpectedly when dragging over content.
                 </Typography>
               </Box>
               <Switch
                 size="small"
-                checked={showHeaderImage}
-                onChange={(e) => setShowHeaderImage(e.target.checked)}
+                checked={enableSidebarSlider}
+                onChange={(e) => {
+                  setEnableSidebarSlider(e.target.checked);
+                  localStorage.setItem('enableSidebarSlider', JSON.stringify(e.target.checked));
+                }}
                 sx={{
                   '& .MuiSwitch-switchBase.Mui-checked': {
-                    color: '#3b82f6',
+                    color: '#f59e0b',
                   },
                   '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                    backgroundColor: '#93c5fd',
+                    backgroundColor: '#fbbf24',
                   },
                 }}
               />
             </Box>
+
           </Box>
 
           {/* Web URL Configuration */}
@@ -915,142 +702,27 @@ const App = (props) => {
         </Box>
       </Popover>
 
-      {/* New Chat Confirmation Popover */}
-      <Popover
-        open={Boolean(popoverAnchor)}
-        anchorEl={popoverAnchor}
-        onClose={handleCancelNewChat}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
-        sx={{
-          '& .MuiPopover-paper': {
-            borderRadius: '12px',
-            padding: '16px',
-            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%)',
-            backdropFilter: 'blur(10px)',
-            boxShadow: '0 8px 24px rgba(59, 130, 246, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1)',
-            border: '1px solid rgba(59, 130, 246, 0.2)',
-            marginTop: '8px',
-            maxWidth: '280px',
-            position: 'relative',
-          }
-        }}
-      >
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              marginBottom: '14px',
-              fontSize: '13px',
-              fontWeight: '600',
-              lineHeight: 1.4,
-            }}
-          >
-            Start a new chat? This will clear your current conversation.
-          </Typography>
-          <Box sx={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-            <Button 
-              onClick={handleCancelNewChat}
-              size="small"
-              variant="outlined"
-              sx={{
-                borderRadius: '8px',
-                fontSize: '12px',
-                padding: '6px 12px',
-                minWidth: '60px',
-                borderColor: 'rgba(59, 130, 246, 0.4)',
-                color: '#3b82f6',
-                background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 250, 252, 0.8) 100%)',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 1px 4px rgba(59, 130, 246, 0.1)',
-                '&:hover': {
-                  transform: 'translateY(-1px)',
-                  borderColor: '#3b82f6',
-                  boxShadow: '0 2px 8px rgba(59, 130, 246, 0.2)',
-                }
-              }}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleConfirmNewChat}
-              size="small"
-              variant="contained"
-              sx={{
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                borderRadius: '8px',
-                fontSize: '12px',
-                padding: '6px 12px',
-                minWidth: '60px',
-                boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
-                  transform: 'translateY(-1px)',
-                  boxShadow: '0 3px 12px rgba(59, 130, 246, 0.4)',
-                }
-              }}
-            >
-              Start New Chat
-            </Button>
-          </Box>
-        </Box>
-      </Popover>
+      <NewChatConfirmation
+        anchor={popoverAnchor}
+        onConfirm={handleConfirmNewChat}
+        onCancel={handleCancelNewChat}
+      />
 
-      {/* Double-click Success Snackbar */}
-      <Snackbar
-        open={showSnackbar}
-        autoHideDuration={3000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity="success" 
-          variant="filled"
-          sx={{
-            borderRadius: '8px',
-            '& .MuiAlert-icon': {
-              color: 'white'
-            }
-          }}
-        >
-          New chat started
-        </Alert>
-      </Snackbar>
+      <NotificationSnackbars
+        showSnackbar={showSnackbar}
+        showQuickConfigSnackbar={showQuickConfigSnackbar}
+        onCloseSnackbar={handleCloseSnackbar}
+        onCloseQuickConfigSnackbar={handleCloseQuickConfigSnackbar}
+      />
 
-      {/* Quick Configure Success Snackbar */}
-      <Snackbar
-        open={showQuickConfigSnackbar}
-        autoHideDuration={3000}
-        onClose={handleCloseQuickConfigSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert 
-          onClose={handleCloseQuickConfigSnackbar} 
-          severity="success" 
-          variant="filled"
-          sx={{
-            borderRadius: '8px',
-            backgroundColor: '#10b981',
-            '& .MuiAlert-icon': {
-              color: 'white'
-            }
-          }}
-        >
-          Quick configuration applied successfully!
-        </Alert>
-      </Snackbar>
+      {/* Full Screen Source Modal */}
+      <FullScreenSourceModal
+        isOpen={fullScreenSource.isOpen}
+        onClose={handleCloseFullScreenSource}
+        content={fullScreenSource.content}
+        url={fullScreenSource.url}
+        title={fullScreenSource.title}
+      />
     </Box>
   );
 };
