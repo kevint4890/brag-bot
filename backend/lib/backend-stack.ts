@@ -167,6 +167,64 @@ export class BackendStack extends Stack {
       pointInTimeRecovery: true,
     });
 
+    /** DynamoDB table for user feedback storage */
+    const userFeedbackTable = new dynamodb.Table(this, "UserFeedbackTable", {
+      tableName: "user-feedback",
+      partitionKey: {
+        name: "feedbackId",
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: "timestamp",
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: RemovalPolicy.DESTROY,
+      pointInTimeRecovery: true,
+      timeToLiveAttribute: "ttl", // Auto-cleanup after 30 days
+    });
+
+    // Add Global Secondary Index for querying by feedback type and date
+    userFeedbackTable.addGlobalSecondaryIndex({
+      indexName: "feedback-type-timestamp-index",
+      partitionKey: {
+        name: "feedback_type",
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: "timestamp",
+        type: dynamodb.AttributeType.STRING,
+      },
+    });
+
+    /** Lambda function to handle feedback storage */
+    const lambdaFeedback = new NodejsFunction(this, "FeedbackHandler", {
+      runtime: Runtime.NODEJS_20_X,
+      entry: join(__dirname, "../lambda/feedback/index.js"),
+      functionName: "store-feedback-handler",
+      timeout: Duration.seconds(30),
+      environment: {
+        DYNAMODB_TABLE: userFeedbackTable.tableName,
+        RETENTION_DAYS: "30",
+        // AWS_REGION is automatically provided by Lambda runtime
+      },
+    });
+
+    // Grant Lambda permissions to write to DynamoDB table
+    userFeedbackTable.grantWriteData(lambdaFeedback);
+
+    // Add CloudWatch Logs permissions for Lambda
+    lambdaFeedback.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ],
+        resources: ["*"],
+      })
+    );
+
     /** Lambda function for WAF IP cleanup */
     const wafCleanupLambda = new NodejsFunction(this, "WafCleanupLambda", {
       runtime: Runtime.NODEJS_18_X,
@@ -264,6 +322,14 @@ export class BackendStack extends Stack {
       restApiName: "rag-api",
       defaultCorsPreflightOptions: {
         allowOrigins: apigw.Cors.ALL_ORIGINS,
+        allowMethods: apigw.Cors.ALL_METHODS,
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date', 
+          'Authorization',
+          'X-Api-Key',
+          'X-Amz-Security-Token'
+        ],
       },
     });
 
@@ -302,6 +368,17 @@ export class BackendStack extends Stack {
     apiGateway.root
       .addResource("urls")
       .addMethod("GET", new apigw.LambdaIntegration(lambdaGetWebUrls));
+
+    apiGateway.root
+      .addResource("feedback", {
+        defaultCorsPreflightOptions: {
+          allowOrigins: apigw.Cors.ALL_ORIGINS,
+          allowMethods: ['POST', 'OPTIONS'],
+          allowHeaders: apigw.Cors.DEFAULT_HEADERS,
+        },
+      })
+      .addMethod("POST", new apigw.LambdaIntegration(lambdaFeedback));
+
 
     apiGateway.addUsagePlan("usage-plan", {
       name: "dev-docs-plan",
@@ -400,6 +477,11 @@ export class BackendStack extends Stack {
 
     new CfnOutput(this, "DocsBucketName", {
       value: docsBucket.bucketName,
+    });
+
+    new CfnOutput(this, "UserFeedbackTableName", {
+      value: userFeedbackTable.tableName,
+    description: "DynamoDB table for user feedback storage"
     });
   }
 }

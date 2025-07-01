@@ -239,7 +239,6 @@ const Chat = (props) => {
     setFeedbackSubmitting(prev => ({ ...prev, [index]: true }));
 
     try {
-      // TODO: Replace with actual API call
       const feedbackData = {
         messageIndex: index,
         question: message.question,
@@ -247,13 +246,31 @@ const Chat = (props) => {
         feedbackType: feedback.type,
         category: feedback.category,
         comment: feedback.comment,
+        sessionId: getSessionId(),
         timestamp: new Date().toISOString()
       };
 
-      console.log('Submitting detailed feedback:', feedbackData);
+      console.log('Submitting feedback:', feedbackData);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // API URL
+      const apiUrl = 'https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/feedback';
+      console.log('API URL:', apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(feedbackData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'HTTP error! status: ${response.status}');
+      }
+
+      const result = await response.json();
+      console.log('Feedback submitted successfully:', result);
 
       // Mark as submitted
       setDetailedFeedback(prev => ({
@@ -282,6 +299,15 @@ const Chat = (props) => {
       setFeedbackSubmitting(prev => ({ ...prev, [index]: false }));
     }
   };
+
+  const getSessionId = () => {
+    let sessionId = sessionStorage.getItem('session_id');
+    if (!sessionId) {
+      sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+      sessionStorage.setItem('session_id', sessionId);
+    }
+    return sessionId;
+  }
 
   const formatCitation = (citation) => {
     if (!citation) return null;

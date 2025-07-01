@@ -12,7 +12,7 @@ const CONFIG = {
   AWS_REGION: 'us-east-2',
   DYNAMODB_TABLE: 'waf-ip-tracking',
   EXPIRATION_HOURS: 8,
-  MAX_IPS_PER_DEVELOPER: 2
+  MAX_IPS_PER_DEVELOPER: 3
 };
 
 // Initialize AWS clients
