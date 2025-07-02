@@ -18,7 +18,6 @@ import {
 } from "@mui/material";
 import React, { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
-import PersonIcon from "@mui/icons-material/Person";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import FindInPageIcon from "@mui/icons-material/FindInPage";
 import LinkIcon from "@mui/icons-material/Link";
@@ -30,7 +29,10 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { IconButton } from "@mui/material";
-import './animations.css';
+import '../../animations.css';
+import { useResponsiveHeight, getResponsiveSpacing } from "../../hooks/useResponsiveHeight";
+import { chatApi } from "../../services/chatApi";
+import { colors, gradients, borderRadius, transitions } from "../../constants/theme";
 
 const TypingIndicator = () => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -57,12 +59,14 @@ const Chat = (props) => {
   const history = props.history;
   const onOpenSourcePanel = props.onOpenSourcePanel;
   const boxRef = useRef(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [feedbackStates, setFeedbackStates] = useState({});
   const [detailedFeedback, setDetailedFeedback] = useState({});
   const [feedbackSubmitting, setFeedbackSubmitting] = useState({});
   const [expandedErrors, setExpandedErrors] = useState({});
   const [closingFeedback, setClosingFeedback] = useState({});
+
+  // Responsive height detection
+  const heightTier = useResponsiveHeight();
 
   // Format timestamp to 12-hour format
   const formatTimestamp = (timestamp) => {
@@ -101,6 +105,10 @@ const Chat = (props) => {
   }, [history]);
 
   // Helper functions for error handling
+  const isModelError = (response) => {
+    return response && response.includes("Error generating an answer. Please check your browser console, WAF configuration, Bedrock model access, and Lambda logs for debugging the error.");
+  };
+
   const isServerError = (response) => {
     return response && response.includes("Server side error: please check function logs");
   };
@@ -326,17 +334,34 @@ const Chat = (props) => {
       sx={{
         height: "100%",
         overflowY: "auto",
-        padding: "24px",
+        overflowX: "hidden",
+        padding: getResponsiveSpacing(heightTier, {
+          xs: "12px",
+          small: "16px",
+          medium: "20px",
+          large: "24px"
+        }),
         background: "linear-gradient(to bottom, #eff6ff, #ffffff)",
         display: "flex",
         flexDirection: "column",
         scrollBehavior: "smooth",
         flex: 1,
         minHeight: 0,
+        maxHeight: "100%",
+        boxSizing: "border-box",
       }}
     >
       {history?.length > 0 ? (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        <Box sx={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: getResponsiveSpacing(heightTier, {
+            xs: "12px",
+            small: "16px",
+            medium: "20px",
+            large: "24px"
+          })
+        }}>
           {history?.map((msg, index) => (
             <Grow 
               in={true} 
@@ -458,7 +483,7 @@ const Chat = (props) => {
                     </Box>
                     {/* Check if this is a server error */}
                     {isServerError(msg.response) && !msg.isLoading ? (
-                      /* Error Message Bubble */
+                      /* Server Error Message Bubble */
                       <Box
                         onClick={() => handleErrorToggle(index)}
                         sx={{
@@ -554,6 +579,118 @@ const Chat = (props) => {
                               }}
                             >
                               {msg.response}
+                            </Typography>
+                          </Box>
+                        </Collapse>
+                      </Box>
+                    ) : isModelError(msg.response) && !msg.isLoading ? (
+                      /* Model Unavailability Error Message Bubble */
+                      <Box
+                        onClick={() => handleErrorToggle(index)}
+                        sx={{
+                          background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                          color: "white",
+                          borderRadius: "18px 18px 18px 4px",
+                          padding: "12px 16px",
+                          boxShadow: "0 4px 12px rgba(239, 68, 68, 0.3)",
+                          border: "2px solid rgba(248, 113, 113, 0.3)",
+                          position: "relative",
+                          cursor: "pointer",
+                          transition: "all 0.3s ease",
+                          animation: "modelErrorPulse 2s ease-in-out infinite",
+                          "&:hover": {
+                            transform: "translateY(-1px)",
+                            boxShadow: "0 6px 20px rgba(239, 68, 68, 0.4)",
+                            borderColor: "rgba(248, 113, 113, 0.5)",
+                          },
+                          "@keyframes modelErrorPulse": {
+                            "0%, 100%": { 
+                              boxShadow: "0 4px 12px rgba(239, 68, 68, 0.3)" 
+                            },
+                            "50%": { 
+                              boxShadow: "0 4px 12px rgba(239, 68, 68, 0.5)" 
+                            },
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <WarningAmberIcon sx={{ fontSize: '18px', color: 'white' }} />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                fontSize: "15px",
+                                lineHeight: 1.5,
+                                fontWeight: "500",
+                                marginBottom: "2px",
+                              }}
+                            >
+                              The AI model is not available right now.
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: "13px",
+                                opacity: 0.9,
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              Please try again later or contact support.
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {expandedErrors[index] ? (
+                              <ExpandLessIcon sx={{ fontSize: '18px', opacity: 0.8 }} />
+                            ) : (
+                              <ExpandMoreIcon sx={{ fontSize: '18px', opacity: 0.8 }} />
+                            )}
+                          </Box>
+                        </Box>
+                        
+                        {/* Expandable Technical Details */}
+                        <Collapse in={expandedErrors[index]}>
+                          <Box sx={{ 
+                            marginTop: '12px',
+                            padding: '8px 12px',
+                            backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(255, 255, 255, 0.2)'
+                          }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontSize: "11px",
+                                opacity: 0.8,
+                                fontFamily: 'monospace',
+                                display: 'block',
+                                marginBottom: '4px',
+                                color: 'rgba(255, 255, 255, 0.7)'
+                              }}
+                            >
+                              Technical Details:
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: "12px",
+                                fontFamily: 'monospace',
+                                wordBreak: "break-all",
+                                lineHeight: 1.4,
+                                color: 'rgba(255, 255, 255, 0.9)'
+                              }}
+                            >
+                              {msg.response}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: "12px",
+                                fontWeight: "500",
+                                marginTop: '12px',
+                                color: 'rgba(255, 255, 255, 0.9)'
+                              }}
+                            >
+                              Note: Please ensure an AI model is selected in the settings. You can access settings via the gear icon in the bottom right.
                             </Typography>
                           </Box>
                         </Collapse>
@@ -843,7 +980,14 @@ const Chat = (props) => {
 
                     {/* Add bottom margin for last message */}
                     {index === history.length - 1 && (
-                      <Box sx={{ marginBottom: '32px' }} />
+                      <Box sx={{ 
+                        marginBottom: getResponsiveSpacing(heightTier, {
+                          xs: "12px",
+                          small: "14px",
+                          medium: "16px",
+                          large: "16px"
+                        })
+                      }} />
                     )}
                   </Box>
                 </Box>
@@ -860,8 +1004,13 @@ const Chat = (props) => {
             alignItems: "center",
             height: "100%",
             textAlign: "center",
-            padding: { xs: "20px 16px", sm: "32px 20px", md: "40px 20px" },
-            minHeight: "300px",
+            padding: getResponsiveSpacing(heightTier, {
+              xs: "12px 8px",
+              small: "16px 12px",
+              medium: "24px 16px",
+              large: "32px 20px"
+            }),
+            minHeight: heightTier === 'xs' ? "200px" : "300px",
             animation: "fadeInUp 0.8s ease-out",
             "@keyframes fadeInUp": {
               "0%": { 
@@ -878,23 +1027,24 @@ const Chat = (props) => {
           <Paper
             elevation={0}
             sx={{
-              padding: { 
-                xs: "32px 24px", 
-                sm: "40px 32px", 
-                md: "48px 40px" 
-              },
-              borderRadius: { xs: "20px", sm: "24px" },
+              padding: getResponsiveSpacing(heightTier, {
+                xs: "16px 12px",
+                small: "24px 18px",
+                medium: "32px 24px",
+                large: "40px 32px"
+              }),
+              borderRadius: heightTier === 'xs' ? "16px" : { xs: "20px", sm: "24px" },
               background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.95) 100%)",
               backdropFilter: "blur(10px)",
               border: "1px solid rgba(59, 130, 246, 0.08)",
-              maxWidth: { xs: "90%", sm: "85%", md: "500px" },
+              maxWidth: { xs: "95%", sm: "90%", md: "500px" },
               width: "100%",
               position: "relative",
               overflow: "hidden",
               transition: "all 0.4s ease",
-              animation: "float 6s ease-in-out infinite",
+              animation: heightTier === 'xs' ? "none" : "float 6s ease-in-out infinite",
               "&:hover": {
-                transform: "translateY(-8px)",
+                transform: heightTier === 'xs' ? "none" : "translateY(-8px)",
                 boxShadow: "0 20px 40px rgba(59, 130, 246, 0.12)",
                 border: "1px solid rgba(59, 130, 246, 0.15)",
               },
@@ -921,17 +1071,32 @@ const Chat = (props) => {
               {/* Enhanced Icon with Background */}
               <Box
                 sx={{
-                  width: "88px",
-                  height: "88px",
+                  width: getResponsiveSpacing(heightTier, {
+                    xs: "60px",
+                    small: "70px",
+                    medium: "80px",
+                    large: "88px"
+                  }),
+                  height: getResponsiveSpacing(heightTier, {
+                    xs: "60px",
+                    small: "70px",
+                    medium: "80px",
+                    large: "88px"
+                  }),
                   borderRadius: "50%",
                   background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  margin: "0 auto 32px",
+                  margin: getResponsiveSpacing(heightTier, {
+                    xs: "0 auto 16px",
+                    small: "0 auto 20px",
+                    medium: "0 auto 28px",
+                    large: "0 auto 32px"
+                  }),
                   boxShadow: "0 8px 24px rgba(59, 130, 246, 0.25)",
                   position: "relative",
-                  animation: "iconPulse 4s ease-in-out infinite",
+                  animation: heightTier === 'xs' ? "none" : "iconPulse 4s ease-in-out infinite",
                   "&::after": {
                     content: '""',
                     position: "absolute",
@@ -942,7 +1107,7 @@ const Chat = (props) => {
                     borderRadius: "50%",
                     background: "linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(29, 78, 216, 0.2) 100%)",
                     zIndex: -1,
-                    animation: "iconGlow 4s ease-in-out infinite",
+                    animation: heightTier === 'xs' ? "none" : "iconGlow 4s ease-in-out infinite",
                   },
                   "@keyframes iconPulse": {
                     "0%, 100%": { transform: "scale(1)" },
@@ -956,7 +1121,12 @@ const Chat = (props) => {
               >
                 <FindInPageIcon 
                   sx={{ 
-                    fontSize: 40, 
+                    fontSize: getResponsiveSpacing(heightTier, {
+                      xs: 28,
+                      small: 32,
+                      medium: 36,
+                      large: 40
+                    }), 
                     color: "white",
                     filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1))",
                   }} 
@@ -972,9 +1142,19 @@ const Chat = (props) => {
                   backgroundClip: "text",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
-                  marginBottom: "12px",
+                  marginBottom: getResponsiveSpacing(heightTier, {
+                    xs: "8px",
+                    small: "10px",
+                    medium: "12px",
+                    large: "12px"
+                  }),
                   letterSpacing: "-0.02em",
-                  fontSize: { xs: "1.75rem", sm: "2rem" },
+                  fontSize: getResponsiveSpacing(heightTier, {
+                    xs: "1.5rem",
+                    small: "1.6rem",
+                    medium: "1.75rem",
+                    large: "2rem"
+                  }),
                 }}
               >
                 Find What You Need
@@ -986,8 +1166,18 @@ const Chat = (props) => {
                 sx={{ 
                   color: "#3b82f6",
                   fontWeight: "600",
-                  marginBottom: "20px",
-                  fontSize: "1rem",
+                  marginBottom: getResponsiveSpacing(heightTier, {
+                    xs: "12px",
+                    small: "16px",
+                    medium: "18px",
+                    large: "20px"
+                  }),
+                  fontSize: getResponsiveSpacing(heightTier, {
+                    xs: "0.9rem",
+                    small: "0.95rem",
+                    medium: "1rem",
+                    large: "1rem"
+                  }),
                   letterSpacing: "0.01em",
                 }}
               >
@@ -1000,13 +1190,31 @@ const Chat = (props) => {
                 sx={{ 
                   color: "#64748b",
                   lineHeight: 1.7,
-                  fontSize: "15px",
-                  marginBottom: "28px",
-                  maxWidth: "420px",
-                  margin: "0 auto 28px",
+                  fontSize: getResponsiveSpacing(heightTier, {
+                    xs: "13px",
+                    small: "14px",
+                    medium: "15px",
+                    large: "15px"
+                  }),
+                  marginBottom: getResponsiveSpacing(heightTier, {
+                    xs: "16px",
+                    small: "20px",
+                    medium: "24px",
+                    large: "28px"
+                  }),
+                  maxWidth: heightTier === 'xs' ? "300px" : "420px",
+                  margin: `0 auto ${getResponsiveSpacing(heightTier, {
+                    xs: "16px",
+                    small: "20px",
+                    medium: "24px",
+                    large: "28px"
+                  })}`,
                 }}
               >
-                Search through company documentation, policies, and procedures. Ask questions naturally and get reliable answers from our secure knowledge base.
+                {heightTier === 'xs' 
+                  ? "Ask questions and get reliable answers from our knowledge base."
+                  : "Search through company documentation, policies, and procedures. Ask questions naturally and get reliable answers from our secure knowledge base."
+                }
               </Typography>
             </Box>
           </Paper>
