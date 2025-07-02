@@ -1,39 +1,50 @@
 /* Typing dots animation */
+@keyframes typingDots {
+  0%, 60%, 100% { 
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  30% { 
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes typingPulse {
+  0%, 100% { 
+    background-color: #9ca3af;
+  }
+  50% { 
+    background-color: #3b82f6;
+  }
+}
+
 .typing-dots {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+  padding: 4px 8px;
 }
 
 .typing-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
   background-color: #9ca3af;
-  animation: typing 1.4s infinite ease-in-out;
+  border-radius: 50%;
+  animation: typingDots 1.6s infinite ease-in-out, typingPulse 1.6s infinite ease-in-out;
+  transition: all 0.3s ease;
 }
 
 .typing-dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.typing-dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-.typing-dot:nth-child(3) {
   animation-delay: 0s;
 }
 
-@keyframes typing {
-  0%, 80%, 100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
+.typing-dot:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.6s;
 }
 
 /* Message slide animations */
@@ -154,5 +165,47 @@
   100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Source panel animations */
+@keyframes slideInFromRight {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutToRight {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Chat container smooth movement */
+@keyframes chatMoveLeft {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes chatMoveCenter {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(0);
   }
 }

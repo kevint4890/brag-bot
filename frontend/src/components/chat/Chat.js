@@ -102,6 +102,10 @@ const Chat = (props) => {
   }, [history]);
 
   // Helper functions for error handling
+  const isModelError = (response) => {
+    return response && response.includes("Error generating an answer. Please check your browser console, WAF configuration, Bedrock model access, and Lambda logs for debugging the error.");
+  };
+
   const isServerError = (response) => {
     return response && response.includes("Server side error: please check function logs");
   };
@@ -470,7 +474,7 @@ const Chat = (props) => {
                     </Box>
                     {/* Check if this is a server error */}
                     {isServerError(msg.response) && !msg.isLoading ? (
-                      /* Error Message Bubble */
+                      /* Server Error Message Bubble */
                       <Box
                         onClick={() => handleErrorToggle(index)}
                         sx={{
@@ -566,6 +570,118 @@ const Chat = (props) => {
                               }}
                             >
                               {msg.response}
+                            </Typography>
+                          </Box>
+                        </Collapse>
+                      </Box>
+                    ) : isModelError(msg.response) && !msg.isLoading ? (
+                      /* Model Unavailability Error Message Bubble */
+                      <Box
+                        onClick={() => handleErrorToggle(index)}
+                        sx={{
+                          background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                          color: "white",
+                          borderRadius: "18px 18px 18px 4px",
+                          padding: "12px 16px",
+                          boxShadow: "0 4px 12px rgba(239, 68, 68, 0.3)",
+                          border: "2px solid rgba(248, 113, 113, 0.3)",
+                          position: "relative",
+                          cursor: "pointer",
+                          transition: "all 0.3s ease",
+                          animation: "modelErrorPulse 2s ease-in-out infinite",
+                          "&:hover": {
+                            transform: "translateY(-1px)",
+                            boxShadow: "0 6px 20px rgba(239, 68, 68, 0.4)",
+                            borderColor: "rgba(248, 113, 113, 0.5)",
+                          },
+                          "@keyframes modelErrorPulse": {
+                            "0%, 100%": { 
+                              boxShadow: "0 4px 12px rgba(239, 68, 68, 0.3)" 
+                            },
+                            "50%": { 
+                              boxShadow: "0 4px 12px rgba(239, 68, 68, 0.5)" 
+                            },
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <WarningAmberIcon sx={{ fontSize: '18px', color: 'white' }} />
+                          <Box sx={{ flex: 1 }}>
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                fontSize: "15px",
+                                lineHeight: 1.5,
+                                fontWeight: "500",
+                                marginBottom: "2px",
+                              }}
+                            >
+                              The AI model is not available right now.
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: "13px",
+                                opacity: 0.9,
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              Please try again later or contact support.
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {expandedErrors[index] ? (
+                              <ExpandLessIcon sx={{ fontSize: '18px', opacity: 0.8 }} />
+                            ) : (
+                              <ExpandMoreIcon sx={{ fontSize: '18px', opacity: 0.8 }} />
+                            )}
+                          </Box>
+                        </Box>
+                        
+                        {/* Expandable Technical Details */}
+                        <Collapse in={expandedErrors[index]}>
+                          <Box sx={{ 
+                            marginTop: '12px',
+                            padding: '8px 12px',
+                            backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(255, 255, 255, 0.2)'
+                          }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontSize: "11px",
+                                opacity: 0.8,
+                                fontFamily: 'monospace',
+                                display: 'block',
+                                marginBottom: '4px',
+                                color: 'rgba(255, 255, 255, 0.7)'
+                              }}
+                            >
+                              Technical Details:
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: "12px",
+                                fontFamily: 'monospace',
+                                wordBreak: "break-all",
+                                lineHeight: 1.4,
+                                color: 'rgba(255, 255, 255, 0.9)'
+                              }}
+                            >
+                              {msg.response}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontSize: "12px",
+                                fontWeight: "500",
+                                marginTop: '12px',
+                                color: 'rgba(255, 255, 255, 0.9)'
+                              }}
+                            >
+                              Note: Please ensure an AI model is selected in the settings. You can access settings via the gear icon in the bottom right.
                             </Typography>
                           </Box>
                         </Collapse>
@@ -855,7 +971,14 @@ const Chat = (props) => {
 
                     {/* Add bottom margin for last message */}
                     {index === history.length - 1 && (
-                      <Box sx={{ marginBottom: '32px' }} />
+                      <Box sx={{ 
+                        marginBottom: getResponsiveSpacing(heightTier, {
+                          xs: "12px",
+                          small: "14px",
+                          medium: "16px",
+                          large: "16px"
+                        })
+                      }} />
                     )}
                   </Box>
                 </Box>

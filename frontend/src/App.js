@@ -35,6 +35,7 @@ const App = (props) => {
   const [devSettingsAnchor, setDevSettingsAnchor] = useState(null);
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [sourcePanel, setSourcePanel] = useState({ isOpen: false, content: null, title: null });
+  const [sourcePanelClosing, setSourcePanelClosing] = useState(false);
   const [enableSourcePanel, setEnableSourcePanel] = useState(true);
   const [enableSidebarSlider, setEnableSidebarSlider] = useState(() => {
     const saved = localStorage.getItem('enableSidebarSlider');
@@ -279,25 +280,21 @@ const App = (props) => {
       isOpen: true,
       content: citation,
       url: url,
-      title: url ? 'Source Document' : 'Source Content'
+      title: 'Source'
     });
   };
 
   const handleCloseSourcePanel = () => {
-    // Capture current chat width before closing sidebar to prevent text reflow
-    if (chatContainerRef.current && sourcePanel.isOpen) {
-      const currentWidth = chatContainerRef.current.offsetWidth;
-      setFixedChatWidth(currentWidth);
-      setIsAnimating(true);
-      
-      // Clear fixed width after animation completes
-      setTimeout(() => {
-        setFixedChatWidth(null);
-        setIsAnimating(false);
-      }, 250); // Match animation duration
-    }
+    // Start the closing animation
+    setSourcePanelClosing(true);
+    setIsAnimating(true);
     
-    setSourcePanel({ isOpen: false, content: null, title: null });
+    // After animation completes, actually close the panel
+    setTimeout(() => {
+      setSourcePanel({ isOpen: false, content: null, title: null });
+      setSourcePanelClosing(false);
+      setIsAnimating(false);
+    }, 300); // Match animation duration
   };
 
   const handleCloseFullScreenSource = () => {
@@ -370,12 +367,12 @@ const App = (props) => {
       <Box
         sx={{
           width: "100%",
-          maxWidth: sourcePanel.isOpen ? "95vw" : { xs: "95vw", sm: "90vw", md: "800px" },
+          maxWidth: (sourcePanel.isOpen || sourcePanelClosing) ? "95vw" : { xs: "95vw", sm: "90vw", md: "800px" },
           height: containerHeight,
           minHeight: heightTier === 'xs' ? "300px" : "400px",
           display: "flex",
-          gap: sourcePanel.isOpen ? (heightTier === 'xs' ? "8px" : "16px") : 0,
-          transition: "all 0.3s ease",
+          gap: (sourcePanel.isOpen || sourcePanelClosing) ? (heightTier === 'xs' ? "8px" : "16px") : 0,
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
         {/* Chat Container */}
@@ -383,7 +380,7 @@ const App = (props) => {
           ref={chatContainerRef}
           elevation={8}
           sx={{
-            width: sourcePanel.isOpen ? `${100 - sidebarWidth}%` : "100%",
+            width: (sourcePanel.isOpen || sourcePanelClosing) ? `${100 - sidebarWidth}%` : "100%",
             height: "100%",
             display: "flex",
             flexDirection: "column",
@@ -394,7 +391,7 @@ const App = (props) => {
             border: "1px solid rgba(59, 130, 246, 0.1)",
             position: "relative",
             zIndex: 1,
-            transition: isAnimating ? "none" : "width 0.3s ease",
+            transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
             "&:hover": {
               boxShadow: "0 12px 40px rgba(59, 130, 246, 0.15)",
             },
@@ -436,6 +433,7 @@ const App = (props) => {
 
         <SourcePanel
           isOpen={sourcePanel.isOpen}
+          isClosing={sourcePanelClosing}
           content={sourcePanel.content}
           title={sourcePanel.title}
           url={sourcePanel.url}
