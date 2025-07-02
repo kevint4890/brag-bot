@@ -67,9 +67,6 @@ const App = (props) => {
     return saved || 'smart'; // 'smart', 'sidebar', 'newTab'
   });
   
-  // Animation state to prevent text reflow during transitions
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [fixedChatWidth, setFixedChatWidth] = useState(null);
   const chatContainerRef = useRef(null);
 
   // Responsive layout detection
@@ -242,7 +239,6 @@ const App = (props) => {
     const url = urlMatch ? urlMatch[0] : null;
     
     // Determine how to handle the source based on responsive layout and user preference
-    const shouldUseSidebar = layout.shouldUseSidebar && sourceBehavior !== 'newTab';
     const forceNewTab = sourceBehavior === 'newTab' || !layout.shouldUseSidebar;
     
     if (forceNewTab && url) {
@@ -262,19 +258,6 @@ const App = (props) => {
       return;
     }
     
-    // Capture current chat width before opening sidebar to prevent text reflow
-    if (chatContainerRef.current && !sourcePanel.isOpen) {
-      const currentWidth = chatContainerRef.current.offsetWidth;
-      setFixedChatWidth(currentWidth);
-      setIsAnimating(true);
-      
-      // Clear fixed width after animation completes
-      setTimeout(() => {
-        setFixedChatWidth(null);
-        setIsAnimating(false);
-      }, 250); // Match animation duration
-    }
-    
     // Use sidebar for desktop
     setSourcePanel({
       isOpen: true,
@@ -287,13 +270,11 @@ const App = (props) => {
   const handleCloseSourcePanel = () => {
     // Start the closing animation
     setSourcePanelClosing(true);
-    setIsAnimating(true);
     
     // After animation completes, actually close the panel
     setTimeout(() => {
       setSourcePanel({ isOpen: false, content: null, title: null });
       setSourcePanelClosing(false);
-      setIsAnimating(false);
     }, 300); // Match animation duration
   };
 
@@ -308,11 +289,6 @@ const App = (props) => {
     localStorage.setItem('sidebarWidth', newWidth.toString());
   };
 
-  // Handle source behavior change
-  const handleSourceBehaviorChange = (newBehavior) => {
-    setSourceBehavior(newBehavior);
-    localStorage.setItem('sourceBehavior', newBehavior);
-  };
 
   // Get responsive spacing values
   const containerPadding = getResponsiveSpacing(heightTier, {
