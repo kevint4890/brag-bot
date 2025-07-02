@@ -3,14 +3,13 @@ import {
   Popover,
   Box,
   Typography,
-  Button,
   Switch,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { QAHeader } from '../../QAHeader';
 import UrlSourcesForm from '../../WebUrlsForm';
 import { getResponsiveSpacing } from '../../hooks/useResponsiveHeight';
-import { colors, gradients, shadows, borderRadius, transitions } from '../../constants/theme';
+import { colors, gradients, shadows, borderRadius } from '../../constants/theme';
 
 const SettingsPopover = ({
   anchor,
@@ -28,7 +27,6 @@ const SettingsPopover = ({
   sourceUrlInfo,
   handleUpdateUrls,
   heightTier,
-  onQuickConfig,
 }) => {
   return (
     <Popover
@@ -141,42 +139,6 @@ const SettingsPopover = ({
           setSelectedModel={onChangeModel}
           selectedModel={selectedModel}
         />
-        
-        {/* Quick Setup Button */}
-        <Box sx={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
-          <Button
-            variant="contained"
-            onClick={onQuickConfig}
-            sx={{
-              background: gradients.success,
-              color: colors.white,
-              borderRadius: borderRadius.md,
-              padding: '12px 20px',
-              fontSize: '13px',
-              fontWeight: '600',
-              textTransform: 'none',
-              boxShadow: shadows.md.replace(colors.primary.main, colors.success.main),
-              transition: transitions.smooth,
-              '&:hover': {
-                background: gradients.successReverse,
-                transform: 'translateY(-2px)',
-                boxShadow: shadows.lg.replace(colors.primary.main, colors.success.main),
-              },
-              '&:active': {
-                transform: 'translateY(0)',
-              },
-            }}
-          >
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-              <Box component="span" sx={{ fontSize: '13px', fontWeight: '600' }}>
-                ⚡️ Quick Configure
-              </Box>
-              <Box component="span" sx={{ fontSize: '10px', opacity: 0.9, lineHeight: '1.2' }}>
-                (Autofills preset API URL & Claude 3.5 Haiku)
-              </Box>
-            </Box>
-          </Button>
-        </Box>
 
         {/* UI Settings */}
         <Box sx={{ marginTop: '20px' }}>

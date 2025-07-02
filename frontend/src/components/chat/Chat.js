@@ -6,32 +6,19 @@ import {
   Grow,
   Paper,
   Collapse,
-  Button,
-  TextField,
-  FormControl,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  CircularProgress,
 } from "@mui/material";
 import React, { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import FindInPageIcon from "@mui/icons-material/FindInPage";
 import LinkIcon from "@mui/icons-material/Link";
-import ThumbUpIcon from "@mui/icons-material/ThumbUp";
-import ThumbDownIcon from "@mui/icons-material/ThumbDown";
-import SendIcon from "@mui/icons-material/Send";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import { IconButton } from "@mui/material";
 import '../../animations.css';
 import { useResponsiveHeight, getResponsiveSpacing } from "../../hooks/useResponsiveHeight";
-import { chatApi } from "../../services/chatApi";
-import { colors, gradients, borderRadius, transitions } from "../../constants/theme";
+import FeedbackSystem from "../feedback/FeedbackSystem";
+import { useFeedback } from "../../hooks/useFeedback";
 
 const TypingIndicator = () => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -58,15 +45,14 @@ const Chat = (props) => {
   const history = props.history;
   const onOpenSourcePanel = props.onOpenSourcePanel;
   const boxRef = useRef(null);
-  const [feedbackStates, setFeedbackStates] = useState({});
-  const [detailedFeedback, setDetailedFeedback] = useState({});
-  const [feedbackSubmitting, setFeedbackSubmitting] = useState({});
   const [expandedErrors, setExpandedErrors] = useState({});
-  const [closingFeedback, setClosingFeedback] = useState({});
+
+  // Initialize feedback hook
+  const feedbackHook = useFeedback();
 
   // Responsive height detection
   const heightTier = useResponsiveHeight();
-
+  
   // Format timestamp to 12-hour format
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return new Date().toLocaleTimeString('en-US', { 
@@ -119,174 +105,6 @@ const Chat = (props) => {
     }));
   };
 
-  // Feedback categories
-  const positiveFeedbackOptions = [
-    { value: 'very_helpful', label: 'Very helpful' },
-    { value: 'mostly_helpful', label: 'Mostly helpful' },
-    { value: 'quick_accurate', label: 'Quick and accurate' },
-    { value: 'well_explained', label: 'Well explained' },
-    { value: 'other_positive', label: 'Other' }
-  ];
-
-  const negativeFeedbackOptions = [
-    { value: 'completely_incorrect', label: 'Completely incorrect' },
-    { value: 'partially_incorrect', label: 'Partially incorrect' },
-    { value: 'irrelevant', label: 'Irrelevant to my question' },
-    { value: 'unclear_confusing', label: 'Unclear or confusing' },
-    { value: 'missing_information', label: 'Missing information' },
-    { value: 'other_negative', label: 'Other' }
-  ];
-
-  const handleFeedbackClick = (index, type) => {
-    const currentState = feedbackStates[index];
-    const newState = currentState === type ? null : type;
-    
-    // If we're unclicking (removing feedback), handle the transition properly
-    if (currentState === type && detailedFeedback[index]?.showDetailed) {
-      // Mark this feedback as closing to prevent conflicts
-      setClosingFeedback(prev => ({
-        ...prev,
-        [index]: true
-      }));
-      
-      // First hide the detailed feedback menu
-      setDetailedFeedback(prev => ({
-        ...prev,
-        [index]: {
-          ...prev[index],
-          showDetailed: false
-        }
-      }));
-      
-      // Wait for the Collapse animation to complete (Material-UI default is 300ms)
-      setTimeout(() => {
-        // Clear the feedback state
-        setFeedbackStates(prev => ({
-          ...prev,
-          [index]: null
-        }));
-        
-        // Clear detailed feedback completely
-        setDetailedFeedback(prev => {
-          const newState = { ...prev };
-          delete newState[index];
-          return newState;
-        });
-        
-        // Clear the closing state
-        setClosingFeedback(prev => {
-          const newState = { ...prev };
-          delete newState[index];
-          return newState;
-        });
-      }, 350); // Slightly longer than Material-UI's default 300ms to ensure completion
-      
-      return;
-    }
-    
-    // Normal feedback selection (not unclicking)
-    setFeedbackStates(prev => ({
-      ...prev,
-      [index]: newState
-    }));
-
-    // Initialize detailed feedback state if feedback is being given
-    if (newState) {
-      setDetailedFeedback(prev => ({
-        ...prev,
-        [index]: {
-          type: newState,
-          category: '',
-          comment: '',
-          showDetailed: true,
-          submitted: false
-        }
-      }));
-      
-      // Scroll to show the feedback form after the Collapse animation completes
-      setTimeout(() => {
-        if (boxRef.current) {
-          const feedbackElement = document.querySelector(`[data-feedback-index="${index}"]`);
-          if (feedbackElement) {
-            // Calculate the position to ensure the entire feedback form is visible
-            const containerRect = boxRef.current.getBoundingClientRect();
-            const elementRect = feedbackElement.getBoundingClientRect();
-            const containerScrollTop = boxRef.current.scrollTop;
-            
-            // Check if the feedback form extends below the visible area
-            if (elementRect.bottom > containerRect.bottom) {
-              const scrollOffset = elementRect.bottom - containerRect.bottom + 20; // 20px padding
-              boxRef.current.scrollTo({
-                top: containerScrollTop + scrollOffset,
-                behavior: 'smooth'
-              });
-            }
-          }
-        }
-      }, 350); // Wait for Collapse animation to complete (Material-UI default is 300ms)
-    }
-  };
-
-  const handleDetailedFeedbackChange = (index, field, value) => {
-    setDetailedFeedback(prev => ({
-      ...prev,
-      [index]: {
-        ...prev[index],
-        [field]: value
-      }
-    }));
-  };
-
-  const submitDetailedFeedback = async (index) => {
-    const feedback = detailedFeedback[index];
-    const message = history[index];
-    
-    if (!feedback.category) return;
-
-    setFeedbackSubmitting(prev => ({ ...prev, [index]: true }));
-
-    try {
-      const feedbackData = {
-        messageIndex: index,
-        question: message.question,
-        response: message.response,
-        feedbackType: feedback.type,
-        category: feedback.category,
-        comment: feedback.comment,
-        timestamp: new Date().toISOString(),
-        sessionId: message.sessionId || 'unknown'
-      };
-
-      // Submit feedback using the API service
-      await chatApi.submitFeedback(feedbackData);
-
-      // Mark as submitted
-      setDetailedFeedback(prev => ({
-        ...prev,
-        [index]: {
-          ...prev[index],
-          submitted: true,
-          showDetailed: false
-        }
-      }));
-
-      // Auto-hide after 3 seconds
-      setTimeout(() => {
-        setDetailedFeedback(prev => {
-          const newState = { ...prev };
-          if (newState[index]) {
-            newState[index].submitted = false;
-          }
-          return newState;
-        });
-      }, 3000);
-
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-    } finally {
-      setFeedbackSubmitting(prev => ({ ...prev, [index]: false }));
-    }
-  };
 
   const formatCitation = (citation) => {
     if (!citation) return null;
@@ -596,7 +414,7 @@ const Chat = (props) => {
                                 marginBottom: "2px",
                               }}
                             >
-                              The AI model is not available right now.
+                              The AI model could not be reached.
                             </Typography>
                             <Typography
                               variant="body2"
@@ -606,7 +424,7 @@ const Chat = (props) => {
                                 lineHeight: 1.4,
                               }}
                             >
-                              Please try again later or contact support.
+                              AI model may not be selected, may be offline, or your IP may not be whitelisted.
                             </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -751,203 +569,19 @@ const Chat = (props) => {
                       />
                     )}
                     
-                    {/* Feedback Buttons */}
-                    <Box sx={{ 
-                      display: 'flex', 
-                      gap: '6px', 
-                      marginTop: '4px',
-                      alignSelf: 'flex-start' 
-                    }}>
-                      <IconButton 
-                        size="small" 
-                        sx={{
-                          color: '#6b7280',
-                          padding: '3px',
-                          minWidth: '24px',
-                          width: '24px',
-                          height: '24px',
-                          '&[data-selected="true"]': {
-                            color: '#3b82f6',
-                          },
-                          '&:hover': {
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                          }
+                    {/* Feedback System */}
+                    {!msg.isLoading && !isServerError(msg.response) && !isModelError(msg.response) && (
+                      <FeedbackSystem
+                        messageIndex={index}
+                        message={{
+                          question: msg.question,
+                          response: msg.response,
+                          sessionId: msg.sessionId || 'unknown'
                         }}
-                        onClick={() => handleFeedbackClick(index, 'up')}
-                        data-selected={feedbackStates[index] === 'up'}
-                      >
-                        <ThumbUpIcon sx={{ fontSize: '16px' }} />
-                      </IconButton>
-                      <IconButton 
-                        size="small" 
-                        sx={{
-                          color: '#6b7280',
-                          padding: '3px',
-                          minWidth: '24px',
-                          width: '24px',
-                          height: '24px',
-                          '&[data-selected="true"]': {
-                            color: '#ef4444',
-                          },
-                          '&:hover': {
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                          }
-                        }}
-                        onClick={() => handleFeedbackClick(index, 'down')}
-                        data-selected={feedbackStates[index] === 'down'}
-                      >
-                        <ThumbDownIcon sx={{ fontSize: '16px' }} />
-                      </IconButton>
-                    </Box>
-
-                    {/* Detailed Feedback Section */}
-                    <Collapse in={detailedFeedback[index]?.showDetailed && !detailedFeedback[index]?.submitted && !closingFeedback[index]}>
-                      <Box 
-                        data-feedback-index={index}
-                        sx={{ 
-                          marginTop: '8px',
-                          padding: '12px',
-                          backgroundColor: 'rgba(248, 250, 252, 0.8)',
-                          borderRadius: '8px',
-                          border: '1px solid rgba(59, 130, 246, 0.1)',
-                          maxWidth: '350px'
-                        }}
-                      >
-                        <FormControl component="fieldset" sx={{ width: '100%' }}>
-                          <FormLabel 
-                            component="legend" 
-                            sx={{ 
-                              fontSize: '13px', 
-                              fontWeight: '600',
-                              color: '#374151',
-                              marginBottom: '8px'
-                            }}
-                          >
-                            {feedbackStates[index] === 'up' ? 'What made this helpful?' : 'What was the issue?'}
-                          </FormLabel>
-                          <RadioGroup
-                            value={detailedFeedback[index]?.category || ''}
-                            onChange={(e) => handleDetailedFeedbackChange(index, 'category', e.target.value)}
-                            sx={{ gap: '2px' }}
-                          >
-                            {(feedbackStates[index] === 'up' ? positiveFeedbackOptions : negativeFeedbackOptions).map((option) => (
-                              <FormControlLabel
-                                key={option.value}
-                                value={option.value}
-                                control={
-                                  <Radio 
-                                    size="small" 
-                                    sx={{ 
-                                      color: '#9ca3af',
-                                      padding: '4px',
-                                      '&.Mui-checked': {
-                                        color: feedbackStates[index] === 'up' ? '#3b82f6' : '#ef4444'
-                                      }
-                                    }} 
-                                  />
-                                }
-                                label={
-                                  <Typography sx={{ fontSize: '12px', color: '#4b5563' }}>
-                                    {option.label}
-                                  </Typography>
-                                }
-                                sx={{ margin: '1px 0', minHeight: '28px' }}
-                              />
-                            ))}
-                          </RadioGroup>
-
-                          {/* Optional Comment Field */}
-                          {(detailedFeedback[index]?.category?.includes('other') || detailedFeedback[index]?.category) && (
-                            <TextField
-                              multiline
-                              rows={2}
-                              placeholder="Additional comments (optional)"
-                              value={detailedFeedback[index]?.comment || ''}
-                              onChange={(e) => handleDetailedFeedbackChange(index, 'comment', e.target.value)}
-                              sx={{
-                                marginTop: '8px',
-                                '& .MuiOutlinedInput-root': {
-                                  fontSize: '12px',
-                                  backgroundColor: 'white',
-                                  '& fieldset': {
-                                    borderColor: 'rgba(59, 130, 246, 0.2)',
-                                  },
-                                  '&:hover fieldset': {
-                                    borderColor: 'rgba(59, 130, 246, 0.3)',
-                                  },
-                                  '&.Mui-focused fieldset': {
-                                    borderColor: '#3b82f6',
-                                  },
-                                }
-                              }}
-                            />
-                          )}
-
-                          {/* Submit Button */}
-                          <Box sx={{ display: 'flex', gap: '6px', marginTop: '12px', justifyContent: 'flex-end' }}>
-                            <Button
-                              size="small"
-                              onClick={() => handleDetailedFeedbackChange(index, 'showDetailed', false)}
-                              sx={{
-                                color: '#6b7280',
-                                fontSize: '11px',
-                                textTransform: 'none',
-                                minWidth: 'auto',
-                                padding: '3px 6px'
-                              }}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              disabled={!detailedFeedback[index]?.category || feedbackSubmitting[index]}
-                              onClick={() => submitDetailedFeedback(index)}
-                              startIcon={
-                                feedbackSubmitting[index] ? 
-                                  <CircularProgress size={10} color="inherit" /> : 
-                                  <SendIcon sx={{ fontSize: '12px' }} />
-                              }
-                              sx={{
-                                backgroundColor: feedbackStates[index] === 'up' ? '#3b82f6' : '#ef4444',
-                                fontSize: '11px',
-                                textTransform: 'none',
-                                minWidth: 'auto',
-                                padding: '4px 8px',
-                                '&:hover': {
-                                  backgroundColor: feedbackStates[index] === 'up' ? '#1d4ed8' : '#dc2626',
-                                },
-                                '&:disabled': {
-                                  backgroundColor: '#9ca3af',
-                                }
-                              }}
-                            >
-                              Submit
-                            </Button>
-                          </Box>
-                        </FormControl>
-                      </Box>
-                    </Collapse>
-
-                    {/* Feedback Submitted Confirmation */}
-                    <Collapse in={detailedFeedback[index]?.submitted}>
-                      <Box sx={{
-                        marginTop: '8px',
-                        padding: '8px 12px',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(59, 130, 246, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        maxWidth: '250px'
-                      }}>
-                        <CheckCircleIcon sx={{ fontSize: '14px', color: '#3b82f6' }} />
-                        <Typography sx={{ fontSize: '12px', color: '#1d4ed8', fontWeight: '500' }}>
-                          Thank you for your feedback!
-                        </Typography>
-                      </Box>
-                    </Collapse>
+                        feedbackHook={feedbackHook}
+                        boxRef={boxRef}
+                      />
+                    )}
 
                     {/* Add bottom margin for last message */}
                     {index === history.length - 1 && (
