@@ -188,7 +188,7 @@ export class BackendStack extends Stack {
     userFeedbackTable.addGlobalSecondaryIndex({
       indexName: "feedback-type-timestamp-index",
       partitionKey: {
-        name: "feedback_type",
+        name: "feedbackType",
         type: dynamodb.AttributeType.STRING,
       },
       sortKey: {

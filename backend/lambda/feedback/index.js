@@ -148,7 +148,6 @@ exports.handler = async (event) => {
             comment: requestBody.comment ? requestBody.comment.substring(0, 500) : null,
             session_id: event.requestContext.requestId || null,
             user_ip: clientIp,
-            created_at: timestamp,
             ttl: ttl,
         };
 
