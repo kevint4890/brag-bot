@@ -1,12 +1,8 @@
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
-import { QAHeader } from "./QAHeader";
 import Chat from "./components/chat/Chat";
 import { useState, useEffect, useRef } from "react";
-import { Typography, Button, Popover, Switch } from "@mui/material";
 import * as React from "react";
-import SettingsIcon from "@mui/icons-material/Settings";
-import UrlSourcesForm from "./WebUrlsForm";
 import {inferenceProfileSummaries} from "./InferenceProfileSummaries";
 import { useResponsiveHeight, useResponsiveLayout, getResponsiveSpacing } from "./hooks/useResponsiveHeight";
 import ResizeHandle from "./components/ui/ResizeHandle";
@@ -17,6 +13,9 @@ import SourcePanel from "./components/panels/SourcePanel";
 import FloatingActionButtons from "./components/ui/FloatingActionButtons";
 import NewChatConfirmation from "./components/ui/NewChatConfirmation";
 import NotificationSnackbars from "./components/ui/NotificationSnackbars";
+import SettingsPopover from "./components/ui/SettingsPopover";
+import { chatApi } from "./services/chatApi";
+import { colors, gradients, shadows, borderRadius, transitions } from "./constants/theme";
 
 const App = (props) => {
   const [history, setHistory] = useState([]);
@@ -62,10 +61,7 @@ const App = (props) => {
     url: null, 
     title: null 
   });
-  const [sourceBehavior, setSourceBehavior] = useState(() => {
-    const saved = localStorage.getItem('sourceBehavior');
-    return saved || 'smart'; // 'smart', 'sidebar', 'newTab'
-  });
+  const sourceBehavior = 'smart'; // Default behavior for source handling
   
   const chatContainerRef = useRef(null);
 
@@ -78,31 +74,23 @@ const App = (props) => {
       return;
     }
     const getWebSourceConfiguration = async () => {
-      fetch(baseUrl + "urls", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setSourceUrlInfo({
-            exclusionFilters: data.exclusionFilters ?? [],
-            inclusionFilters: data.inclusionFilters ?? [],
-            seedUrlList: data.seedUrlList ?? [],
-          });
-          setHasWebDataSource(true);
-        })
-        .catch((err) => {
-          console.log("err", err);
+      try {
+        const data = await chatApi.getWebSourceConfiguration(baseUrl);
+        setSourceUrlInfo({
+          exclusionFilters: data.exclusionFilters ?? [],
+          inclusionFilters: data.inclusionFilters ?? [],
+          seedUrlList: data.seedUrlList ?? [],
         });
-
+        setHasWebDataSource(true);
+      } catch (err) {
+        console.log("err", err);
+      }
     };
     getWebSourceConfiguration();
   }, [baseUrl]);
 
 
-  const handleSendQuestion = () => {
+  const handleSendQuestion = async () => {
     if (!question.trim()) return;
     
     setSpinner(true);
@@ -121,49 +109,43 @@ const App = (props) => {
     ];
     setHistory(newHistory);
 
-    fetch(baseUrl + "docs", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    try {
+      const data = await chatApi.sendQuestion(baseUrl, {
         requestSessionId: sessionId,
         question: currentQuestion,
         inferenceProfileId: selectedModel?.inferenceProfileId,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        console.log("data", data);
-        setSpinner(false);
-        setSessionId(data.sessionId);
-        // Update the last message with the actual response
-        setHistory(prevHistory => {
-          const updatedHistory = [...prevHistory];
-          updatedHistory[updatedHistory.length - 1] = {
-            question: currentQuestion,
-            response: data.response,
-            citation: data.citation,
-            isLoading: false,
-          };
-          return updatedHistory;
-        });
-      })
-      .catch((err) => {
-        setSpinner(false);
-        // Update the last message with error response
-        setHistory(prevHistory => {
-          const updatedHistory = [...prevHistory];
-          updatedHistory[updatedHistory.length - 1] = {
-            question: currentQuestion,
-            response:
-              "Error generating an answer. Please check your browser console, WAF configuration, Bedrock model access, and Lambda logs for debugging the error.",
-            citation: undefined,
-            isLoading: false,
-          };
-          return updatedHistory;
-        });
       });
+      
+      console.log("data", data);
+      setSpinner(false);
+      setSessionId(data.sessionId);
+      
+      // Update the last message with the actual response
+      setHistory(prevHistory => {
+        const updatedHistory = [...prevHistory];
+        updatedHistory[updatedHistory.length - 1] = {
+          question: currentQuestion,
+          response: data.response,
+          citation: data.citation,
+          isLoading: false,
+        };
+        return updatedHistory;
+      });
+    } catch (err) {
+      setSpinner(false);
+      // Update the last message with error response
+      setHistory(prevHistory => {
+        const updatedHistory = [...prevHistory];
+        updatedHistory[updatedHistory.length - 1] = {
+          question: currentQuestion,
+          response:
+            "Error generating an answer. Please check your browser console, WAF configuration, Bedrock model access, and Lambda logs for debugging the error.",
+          citation: undefined,
+          isLoading: false,
+        };
+        return updatedHistory;
+      });
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -208,23 +190,11 @@ const App = (props) => {
     newExclusionFilters,
     newInclusionFilters
   ) => {
-    try {
-      const response = await fetch(baseUrl + "web-urls", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          urlList: [...new Set(urls)],
-          exclusionFilters: [...new Set(newExclusionFilters)],
-          inclusionFilters: [...new Set(newInclusionFilters)],
-        }),
-      });
-      return !!response.ok;
-    } catch (error) {
-      console.log("Error:", error);
-      return false;
-    }
+    return await chatApi.updateWebUrls(baseUrl, {
+      urlList: urls,
+      exclusionFilters: newExclusionFilters,
+      inclusionFilters: newInclusionFilters,
+    });
   };
 
   const handleChangeModel = (model) => {
@@ -424,10 +394,10 @@ const App = (props) => {
           const quickSetupUrl = "https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/";
           setBaseUrl(quickSetupUrl);
           
-          // Find Claude 3.5 Sonnet model from inference profiles
+          // Find Claude 3.5 Haiku model from inference profiles
           const claudeModel = inferenceProfileSummaries.find(model => 
-            model.inferenceProfileId.includes('claude-3-5-sonnet') || 
-            (model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('sonnet'))
+            model.inferenceProfileId.includes('claude-3-5-haiku') || 
+            (model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('3.5') && model.inferenceProfileName.toLowerCase().includes('haiku'))
           );
           
           if (claudeModel) {
@@ -440,241 +410,37 @@ const App = (props) => {
         onOpenSettings={(e) => setDevSettingsAnchor(e.currentTarget)}
       />
 
-      {/* Developer Settings Popup */}
-      <Popover
-        open={Boolean(devSettingsAnchor)}
-        anchorEl={devSettingsAnchor}
+      <SettingsPopover
+        anchor={devSettingsAnchor}
         onClose={() => setDevSettingsAnchor(null)}
-        anchorOrigin={{
-          vertical: 'top',
-          horizontal: 'left',
-        }}
-        transformOrigin={{
-          vertical: 'bottom',
-          horizontal: 'right',
-        }}
-        sx={{
-          '& .MuiPopover-paper': {
-            borderRadius: getResponsiveSpacing(heightTier, {
-              xs: '16px',
-              small: '20px',
-              medium: '24px',
-              large: '24px'
-            }),
-            padding: '0',
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: `
-              0 8px 32px rgba(0, 0, 0, 0.15),
-              0 1px 0 rgba(255, 255, 255, 0.9) inset,
-              0 -1px 0 rgba(255, 255, 255, 0.3) inset,
-              0 0 0 1px rgba(255, 255, 255, 0.1) inset
-            `,
-            border: '1px solid rgba(255, 255, 255, 0.4)',
-            marginBottom: '8px',
-            maxWidth: getResponsiveSpacing(heightTier, {
-              xs: '95vw',
-              small: '350px',
-              medium: '400px',
-              large: '420px'
-            }),
-            minWidth: getResponsiveSpacing(heightTier, {
-              xs: '280px',
-              small: '320px',
-              medium: '360px',
-              large: '380px'
-            }),
-            maxHeight: getResponsiveSpacing(heightTier, {
-              xs: '90vh',
-              small: '85vh',
-              medium: '80vh',
-              large: '80vh'
-            }),
-            position: 'relative',
-            overflow: 'hidden',
+        baseUrl={baseUrl}
+        setBaseUrl={setBaseUrl}
+        inferenceProfileSummaries={inferenceProfileSummaries}
+        selectedModel={selectedModel}
+        onChangeModel={handleChangeModel}
+        enableSourcePanel={enableSourcePanel}
+        setEnableSourcePanel={setEnableSourcePanel}
+        enableSidebarSlider={enableSidebarSlider}
+        setEnableSidebarSlider={setEnableSidebarSlider}
+        hasWebDataSource={hasWebDataSource}
+        sourceUrlInfo={sourceUrlInfo}
+        handleUpdateUrls={handleUpdateUrls}
+        heightTier={heightTier}
+        onQuickConfig={() => {
+          const quickSetupUrl = "https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/";
+          setBaseUrl(quickSetupUrl);
+          
+          // Find Claude 3.5 Haiku model from inference profiles
+          const claudeModel = inferenceProfileSummaries.find(model => 
+            model.inferenceProfileId.includes('claude-3-5-haiku') || 
+            (model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('3.5') && model.inferenceProfileName.toLowerCase().includes('haiku'))
+          );
+          
+          if (claudeModel) {
+            setSelectedModel(claudeModel);
           }
         }}
-      >
-        <Box 
-          sx={{ 
-            padding: '24px',
-            maxHeight: '80vh',
-            overflowY: 'auto',
-            '&::-webkit-scrollbar': {
-              width: '6px',
-            },
-            '&::-webkit-scrollbar-track': {
-              background: 'rgba(0,0,0,0.05)',
-              borderRadius: '3px',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: 'rgba(59, 130, 246, 0.3)',
-              borderRadius: '3px',
-              '&:hover': {
-                background: 'rgba(59, 130, 246, 0.5)',
-              },
-            },
-          }}
-        >
-          {/* Header */}
-          <Box sx={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-            <SettingsIcon sx={{ color: '#3b82f6', marginRight: '8px' }} />
-            <Typography 
-              variant="h6" 
-              sx={{ 
-                color: '#1e40af', 
-                fontWeight: '600',
-                fontSize: '1.1rem',
-              }}
-            >
-              Developer Settings
-            </Typography>
-            {baseUrl && selectedModel && (
-              <Typography
-                variant="caption"
-                sx={{
-                  marginLeft: 'auto',
-                  color: '#22c55e',
-                  fontWeight: 'bold',
-                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(34, 197, 94, 0.3)',
-                }}
-              >
-                ● Connected
-              </Typography>
-            )}
-          </Box>
-
-          {/* API Configuration */}
-          <QAHeader
-            setBaseUrl={setBaseUrl}
-            baseUrl={baseUrl}
-            inferenceProfileSummaries={inferenceProfileSummaries}
-            setSelectedModel={handleChangeModel}
-            selectedModel={selectedModel}
-          />
-          
-          {/* Quick Setup Button */}
-          <Box sx={{ marginTop: '16px' }}>
-            <Button
-              variant="contained"
-              onClick={() => {
-                const quickSetupUrl = "https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/";
-                setBaseUrl(quickSetupUrl);
-                
-                // Find Claude 3.5 Sonnet model from inference profiles
-                const claudeModel = inferenceProfileSummaries.find(model => 
-                  model.inferenceProfileId.includes('claude-3-5-sonnet') || 
-                  (model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('sonnet'))
-                );
-                
-                if (claudeModel) {
-                  setSelectedModel(claudeModel);
-                }
-              }}
-              sx={{
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                color: 'white',
-                borderRadius: '12px',
-                padding: '10px 20px',
-                fontSize: '13px',
-                fontWeight: '600',
-                textTransform: 'none',
-                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
-                transition: 'all 0.3s ease',
-                width: '100%',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)',
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                },
-              }}
-            >
-              ⚡️ Quick Configure (Autofills preset API URL & Claude 3.5 Sonnet)
-            </Button>
-          </Box>
-
-          {/* UI Settings */}
-          <Box sx={{ marginTop: '20px' }}>
-            <Typography variant="h6" sx={{ color: '#1e40af', fontWeight: '600', marginBottom: '12px', fontSize: '14px' }}>
-              UI Settings
-            </Typography>
-            
-            {/* Source Panel Toggle */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.1)', marginBottom: '12px' }}>
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: '600', color: '#1e40af', marginBottom: '4px' }}>
-                  📄 Source Documents Panel
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#6b7280', fontSize: '12px' }}>
-                  When you click on source links in chat responses, open them in a side panel instead of new browser tabs. Makes it easier to reference sources while continuing your conversation.
-                </Typography>
-              </Box>
-              <Switch
-                size="small"
-                checked={enableSourcePanel}
-                onChange={(e) => setEnableSourcePanel(e.target.checked)}
-                sx={{
-                  '& .MuiSwitch-switchBase.Mui-checked': {
-                    color: '#3b82f6',
-                  },
-                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                    backgroundColor: '#93c5fd',
-                  },
-                }}
-              />
-            </Box>
-
-            {/* Sidebar Slider Toggle */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: 'rgba(255, 193, 7, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 193, 7, 0.2)', marginBottom: '12px' }}>
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: '600', color: '#d97706', marginBottom: '4px' }}>
-                  ↔️ Resizable Panel (Experimental)
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#6b7280', fontSize: '12px' }}>
-                  Add a draggable handle to resize the source panel width. Click and drag the thin line between panels to adjust. Note: Still in early stages, may lag or react unexpectedly when dragging over content.
-                </Typography>
-              </Box>
-              <Switch
-                size="small"
-                checked={enableSidebarSlider}
-                onChange={(e) => {
-                  setEnableSidebarSlider(e.target.checked);
-                  localStorage.setItem('enableSidebarSlider', JSON.stringify(e.target.checked));
-                }}
-                sx={{
-                  '& .MuiSwitch-switchBase.Mui-checked': {
-                    color: '#f59e0b',
-                  },
-                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                    backgroundColor: '#fbbf24',
-                  },
-                }}
-              />
-            </Box>
-
-          </Box>
-
-          {/* Web URL Configuration */}
-          {hasWebDataSource && (
-            <Box sx={{ marginTop: '20px' }}>
-              <UrlSourcesForm
-                exclusionFilters={sourceUrlInfo.exclusionFilters}
-                inclusionFilters={sourceUrlInfo.inclusionFilters}
-                seedUrlList={sourceUrlInfo.seedUrlList.map(
-                  (urlObj) => urlObj.url
-                )}
-                handleUpdateUrls={handleUpdateUrls}
-              />
-            </Box>
-          )}
-        </Box>
-      </Popover>
+      />
 
       <NewChatConfirmation
         anchor={popoverAnchor}

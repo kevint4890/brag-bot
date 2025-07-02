@@ -30,6 +30,8 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { IconButton } from "@mui/material";
 import '../../animations.css';
 import { useResponsiveHeight, getResponsiveSpacing } from "../../hooks/useResponsiveHeight";
+import { chatApi } from "../../services/chatApi";
+import { colors, gradients, borderRadius, transitions } from "../../constants/theme";
 
 const TypingIndicator = () => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -255,30 +257,8 @@ const Chat = (props) => {
         sessionId: message.sessionId || 'unknown'
       };
 
-      // Try to submit feedback to API endpoint if available
-      try {
-        const baseUrl = window.location.origin.includes('localhost') 
-          ? 'https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/' 
-          : window.location.origin + '/api/';
-          
-        await fetch(baseUrl + 'feedback', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(feedbackData),
-        });
-        
-        console.log('Feedback submitted successfully:', feedbackData);
-      } catch (apiError) {
-        // Fallback: Log to console if API is not available
-        console.log('API not available, logging feedback locally:', feedbackData);
-        
-        // Store feedback in localStorage as fallback
-        const existingFeedback = JSON.parse(localStorage.getItem('chatFeedback') || '[]');
-        existingFeedback.push(feedbackData);
-        localStorage.setItem('chatFeedback', JSON.stringify(existingFeedback));
-      }
+      // Submit feedback using the API service
+      await chatApi.submitFeedback(feedbackData);
 
       // Mark as submitted
       setDetailedFeedback(prev => ({
