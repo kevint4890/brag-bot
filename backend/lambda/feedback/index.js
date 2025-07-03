@@ -146,7 +146,8 @@ exports.handler = async (event) => {
             feedbackType: requestBody.feedbackType,
             category: requestBody.category ? requestBody.category.substring(0, 100) : null,
             comment: requestBody.comment ? requestBody.comment.substring(0, 500) : null,
-            session_id: event.requestContext.requestId || null,
+            request_id: event.requestContext.requestId || null,
+            session_id: requestBody.sessionId || null,
             user_ip: clientIp,
             ttl: ttl,
         };
