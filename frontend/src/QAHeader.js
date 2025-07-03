@@ -1,10 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import TextField from "@mui/material/TextField";
 import Autocomplete from "@mui/material/Autocomplete";
-import { Typography, Chip, Avatar, Popover } from "@mui/material";
-import Alert from "@mui/material/Alert";
+import { Typography, Popover } from "@mui/material";
 import Tooltip from "@mui/material/Tooltip";
-import Divider from "@mui/material/Divider";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import InputIcon from "@mui/icons-material/Input";
@@ -13,7 +11,6 @@ import OutlinedInput from "@mui/material/OutlinedInput";
 import LinkIcon from "@mui/icons-material/Link";
 import CloudIcon from "@mui/icons-material/Cloud";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import InfoIcon from "@mui/icons-material/Info";
 import PropTypes from "prop-types";
 
@@ -24,6 +21,11 @@ export const QAHeader = (props) => {
   const [infoAnchor, setInfoAnchor] = useState(null);
   const modelListDisabledText =
     "Input a valid base url to enable model selection";
+
+  // Sync local URL state with baseUrl prop
+  useEffect(() => {
+    setUrl(baseUrl ?? "");
+  }, [baseUrl]);
 
   const handleKeyDown = (event) => {
     if (event.key === "Enter") {

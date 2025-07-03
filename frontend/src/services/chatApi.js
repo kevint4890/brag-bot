@@ -57,22 +57,24 @@ export const chatApi = {
   // Submit feedback (with fallback to localStorage)
   async submitFeedback(feedbackData) {
     try {
-      // Try to submit to API endpoint
+      // Try to submit to API endpoint - use relative path for production
       const baseUrl = window.location.origin.includes('localhost') 
-        ? 'https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/' 
+        ? null // No default URL for localhost - user must configure
         : window.location.origin + '/api/';
         
-      const response = await fetch(baseUrl + 'feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(feedbackData),
-      });
-      
-      if (response.ok) {
-        console.log('Feedback submitted successfully:', feedbackData);
-        return true;
+      if (baseUrl) {
+        const response = await fetch(baseUrl + 'feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(feedbackData),
+        });
+        
+        if (response.ok) {
+          console.log('Feedback submitted successfully:', feedbackData);
+          return true;
+        }
       }
     } catch (apiError) {
       console.log('API not available, logging feedback locally:', feedbackData);

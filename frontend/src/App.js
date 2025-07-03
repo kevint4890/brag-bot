@@ -1,7 +1,7 @@
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Chat from "./components/chat/Chat";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as React from "react";
 import {inferenceProfileSummaries} from "./InferenceProfileSummaries";
 import { useResponsiveHeight, useResponsiveLayout, getResponsiveSpacing } from "./hooks/useResponsiveHeight";
@@ -14,54 +14,17 @@ import FloatingActionButtons from "./components/ui/FloatingActionButtons";
 import NewChatConfirmation from "./components/ui/NewChatConfirmation";
 import NotificationSnackbars from "./components/ui/NotificationSnackbars";
 import SettingsPopover from "./components/ui/SettingsPopover";
-import { chatApi } from "./services/chatApi";
-import { colors, gradients, shadows, borderRadius, transitions } from "./constants/theme";
+import { useChat } from "./hooks/useChat";
+import { useSettings } from "./hooks/useSettings";
+import { useNotifications } from "./hooks/useNotifications";
+import { useUIState } from "./hooks/useUIState";
 
 const App = (props) => {
-  const [history, setHistory] = useState([]);
-  const [selectedModel, setSelectedModel] = useState(undefined);
-  const [baseUrl, setBaseUrl] = useState(undefined);
-  const [question, setQuestion] = useState('');
-  const [spinner, setSpinner] = useState(false);
-  const [sessionId, setSessionId] = useState(undefined);
-  const [sourceUrlInfo, setSourceUrlInfo] = useState({
-    exclusionFilters: [],
-    inclusionFilters: [],
-    seedUrlList: [],
-  });
-  const [hasWebDataSource, setHasWebDataSource] = useState(false);
-  const [popoverAnchor, setPopoverAnchor] = useState(null);
-  const [devSettingsAnchor, setDevSettingsAnchor] = useState(null);
-  const [showSnackbar, setShowSnackbar] = useState(false);
-  const [sourcePanel, setSourcePanel] = useState({ isOpen: false, content: null, title: null });
-  const [sourcePanelClosing, setSourcePanelClosing] = useState(false);
-  const [enableSourcePanel, setEnableSourcePanel] = useState(true);
-  const [enableSidebarSlider, setEnableSidebarSlider] = useState(() => {
-    const saved = localStorage.getItem('enableSidebarSlider');
-    return saved ? JSON.parse(saved) : false;
-  });
-
-  // Reset sidebar to default size when slider is disabled
-  useEffect(() => {
-    if (!enableSidebarSlider) {
-      setSidebarWidth(55); // Reset to default 55%
-      localStorage.setItem('sidebarWidth', '55');
-    }
-  }, [enableSidebarSlider]);
-  const [showQuickConfigSnackbar, setShowQuickConfigSnackbar] = useState(false);
-
-  // New state for sidebar resizing and mobile handling
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem('sidebarWidth');
-    return saved ? parseFloat(saved) : 55;
-  });
-  const [fullScreenSource, setFullScreenSource] = useState({ 
-    isOpen: false, 
-    content: null, 
-    url: null, 
-    title: null 
-  });
-  const sourceBehavior = 'smart'; // Default behavior for source handling
+  // Custom hooks for state management
+  const settings = useSettings();
+  const chat = useChat(settings.baseUrl, settings.selectedModel, settings.sessionId, settings.setSessionId);
+  const notifications = useNotifications();
+  const ui = useUIState();
   
   const chatContainerRef = useRef(null);
 
@@ -69,194 +32,30 @@ const App = (props) => {
   const layout = useResponsiveLayout();
   const heightTier = useResponsiveHeight();
 
+  // Reset sidebar width when slider is disabled
   useEffect(() => {
-    if (!baseUrl) {
-      return;
-    }
-    const getWebSourceConfiguration = async () => {
-      try {
-        const data = await chatApi.getWebSourceConfiguration(baseUrl);
-        setSourceUrlInfo({
-          exclusionFilters: data.exclusionFilters ?? [],
-          inclusionFilters: data.inclusionFilters ?? [],
-          seedUrlList: data.seedUrlList ?? [],
-        });
-        setHasWebDataSource(true);
-      } catch (err) {
-        console.log("err", err);
-      }
-    };
-    getWebSourceConfiguration();
-  }, [baseUrl]);
+    ui.resetSidebarWidth(settings.enableSidebarSlider);
+  }, [settings.enableSidebarSlider, ui.resetSidebarWidth]);
 
 
-  const handleSendQuestion = async () => {
-    if (!question.trim()) return;
-    
-    setSpinner(true);
-    const currentQuestion = question;
-    setQuestion(''); // Clear input immediately
-
-    // Add the user question and a loading response immediately
-    const newHistory = [
-      ...history,
-      {
-        question: currentQuestion,
-        response: "",
-        isLoading: true,
-        citation: undefined,
-      },
-    ];
-    setHistory(newHistory);
-
-    try {
-      const data = await chatApi.sendQuestion(baseUrl, {
-        requestSessionId: sessionId,
-        question: currentQuestion,
-        inferenceProfileId: selectedModel?.inferenceProfileId,
-      });
-      
-      console.log("data", data);
-      setSpinner(false);
-      setSessionId(data.sessionId);
-      
-      // Update the last message with the actual response
-      setHistory(prevHistory => {
-        const updatedHistory = [...prevHistory];
-        updatedHistory[updatedHistory.length - 1] = {
-          question: currentQuestion,
-          response: data.response,
-          citation: data.citation,
-          isLoading: false,
-        };
-        return updatedHistory;
-      });
-    } catch (err) {
-      setSpinner(false);
-      // Update the last message with error response
-      setHistory(prevHistory => {
-        const updatedHistory = [...prevHistory];
-        updatedHistory[updatedHistory.length - 1] = {
-          question: currentQuestion,
-          response:
-            "Error generating an answer. Please check your browser console, WAF configuration, Bedrock model access, and Lambda logs for debugging the error.",
-          citation: undefined,
-          isLoading: false,
-        };
-        return updatedHistory;
-      });
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendQuestion();
-    }
-  };
-
+  // Event handlers that integrate with hooks
   const handleNewChatClick = (event) => {
-    // Show popover immediately on single click
-    setPopoverAnchor(event.currentTarget);
+    ui.handleNewChatClick(event);
   };
 
   const handleNewChatDoubleClick = (event) => {
-    // Double-click: immediately start new chat and close any open popover
-    event.preventDefault();
-    setHistory([]);
-    setShowSnackbar(true);
-    setPopoverAnchor(null);
+    const shouldStartNewChat = ui.handleNewChatDoubleClick(event);
+    if (shouldStartNewChat) {
+      chat.clearHistory();
+      notifications.showNewChatNotification();
+    }
   };
 
   const handleConfirmNewChat = () => {
-    setHistory([]);
-    setPopoverAnchor(null);
-  };
-
-  const handleCancelNewChat = () => {
-    setPopoverAnchor(null);
-  };
-
-  const handleCloseSnackbar = () => {
-    setShowSnackbar(false);
-  };
-
-  const handleCloseQuickConfigSnackbar = () => {
-    setShowQuickConfigSnackbar(false);
-  };
-
-  const handleUpdateUrls = async (
-    urls,
-    newExclusionFilters,
-    newInclusionFilters
-  ) => {
-    return await chatApi.updateWebUrls(baseUrl, {
-      urlList: urls,
-      exclusionFilters: newExclusionFilters,
-      inclusionFilters: newInclusionFilters,
-    });
-  };
-
-  const handleChangeModel = (model) => {
-    setSelectedModel(model);
-    setSessionId(undefined)
-  }
-
-  // Smart source handling based on screen size and user preference
-  const handleOpenSourcePanel = (citation) => {
-    // Extract URL from citation if it contains one
-    const urlMatch = citation.match(/https?:\/\/[^\s]+/);
-    const url = urlMatch ? urlMatch[0] : null;
-    
-    // Determine how to handle the source based on responsive layout and user preference
-    const forceNewTab = sourceBehavior === 'newTab' || !layout.shouldUseSidebar;
-    
-    if (forceNewTab && url) {
-      // Open in new tab for mobile or when user prefers new tabs
-      window.open(url, '_blank');
-      return;
+    const shouldStartNewChat = ui.handleConfirmNewChat();
+    if (shouldStartNewChat) {
+      chat.clearHistory();
     }
-    
-    if (!layout.shouldUseSidebar && sourceBehavior === 'smart') {
-      // Use full-screen modal for mobile when no URL or user prefers integrated experience
-      setFullScreenSource({
-        isOpen: true,
-        content: citation,
-        url: url,
-        title: url ? 'Source Document' : 'Source Content'
-      });
-      return;
-    }
-    
-    // Use sidebar for desktop
-    setSourcePanel({
-      isOpen: true,
-      content: citation,
-      url: url,
-      title: 'Source'
-    });
-  };
-
-  const handleCloseSourcePanel = () => {
-    // Start the closing animation
-    setSourcePanelClosing(true);
-    
-    // After animation completes, actually close the panel
-    setTimeout(() => {
-      setSourcePanel({ isOpen: false, content: null, title: null });
-      setSourcePanelClosing(false);
-    }, 300); // Match animation duration
-  };
-
-  const handleCloseFullScreenSource = () => {
-    setFullScreenSource({ isOpen: false, content: null, url: null, title: null });
-  };
-
-  // Handle sidebar resizing
-  const handleSidebarResize = (deltaPercent) => {
-    const newWidth = Math.max(20, Math.min(70, sidebarWidth + deltaPercent));
-    setSidebarWidth(newWidth);
-    localStorage.setItem('sidebarWidth', newWidth.toString());
   };
 
 
@@ -313,11 +112,11 @@ const App = (props) => {
       <Box
         sx={{
           width: "100%",
-          maxWidth: (sourcePanel.isOpen || sourcePanelClosing) ? "95vw" : { xs: "95vw", sm: "90vw", md: "800px" },
+          maxWidth: (ui.sourcePanel.isOpen || ui.sourcePanelClosing) ? "95vw" : { xs: "95vw", sm: "90vw", md: "800px" },
           height: containerHeight,
           minHeight: heightTier === 'xs' ? "300px" : "400px",
           display: "flex",
-          gap: (sourcePanel.isOpen || sourcePanelClosing) ? (heightTier === 'xs' ? "8px" : "16px") : 0,
+          gap: (ui.sourcePanel.isOpen || ui.sourcePanelClosing) ? (heightTier === 'xs' ? "8px" : "16px") : 0,
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
@@ -326,7 +125,7 @@ const App = (props) => {
           ref={chatContainerRef}
           elevation={8}
           sx={{
-            width: (sourcePanel.isOpen || sourcePanelClosing) ? `${100 - sidebarWidth}%` : "100%",
+            width: (ui.sourcePanel.isOpen || ui.sourcePanelClosing) ? `${100 - ui.sidebarWidth}%` : "100%",
             height: "100%",
             display: "flex",
             flexDirection: "column",
@@ -346,122 +145,91 @@ const App = (props) => {
           <ChatHeader
             onNewChat={handleNewChatClick}
             onNewChatDoubleClick={handleNewChatDoubleClick}
-            hasHistory={history.length > 0}
+            hasHistory={chat.hasHistory}
             heightTier={heightTier}
           />
 
           {/* Chat Messages Area */}
           <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
             <Chat 
-              history={history} 
-              onOpenSourcePanel={enableSourcePanel ? handleOpenSourcePanel : null} 
+              history={chat.history} 
+              onOpenSourcePanel={settings.enableSourcePanel ? ui.handleOpenSourcePanel : null} 
             />
           </Box>
 
           <ChatInput
-            question={question}
-            setQuestion={setQuestion}
-            onSendQuestion={handleSendQuestion}
-            onKeyDown={handleKeyDown}
-            disabled={spinner}
-            baseUrl={baseUrl}
+            question={chat.question}
+            setQuestion={chat.setQuestion}
+            onSendQuestion={chat.handleSendQuestion}
+            onKeyDown={chat.handleKeyDown}
+            disabled={chat.spinner}
+            baseUrl={settings.baseUrl}
             heightTier={heightTier}
           />
         </Paper>
 
         {/* Resize Handle */}
-        {sourcePanel.isOpen && layout.shouldUseSidebar && enableSidebarSlider && (
+        {ui.sourcePanel.isOpen && layout.shouldUseSidebar && settings.enableSidebarSlider && (
           <ResizeHandle
-            onResize={handleSidebarResize}
+            onResize={ui.handleSidebarResize}
             isVisible={true}
           />
         )}
 
         <SourcePanel
-          isOpen={sourcePanel.isOpen}
-          isClosing={sourcePanelClosing}
-          content={sourcePanel.content}
-          title={sourcePanel.title}
-          url={sourcePanel.url}
-          sidebarWidth={sidebarWidth}
-          onClose={handleCloseSourcePanel}
+          isOpen={ui.sourcePanel.isOpen}
+          isClosing={ui.sourcePanelClosing}
+          content={ui.sourcePanel.content}
+          title={ui.sourcePanel.title}
+          url={ui.sourcePanel.url}
+          sidebarWidth={ui.sidebarWidth}
+          onClose={ui.handleCloseSourcePanel}
           heightTier={heightTier}
         />
       </Box>
 
       <FloatingActionButtons
-        onQuickConfig={() => {
-          const quickSetupUrl = "https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/";
-          setBaseUrl(quickSetupUrl);
-          
-          // Find Claude 3.5 Haiku model from inference profiles
-          const claudeModel = inferenceProfileSummaries.find(model => 
-            model.inferenceProfileId.includes('claude-3-5-haiku') || 
-            (model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('3.5') && model.inferenceProfileName.toLowerCase().includes('haiku'))
-          );
-          
-          if (claudeModel) {
-            setSelectedModel(claudeModel);
-          }
-          
-          // Show confirmation message
-          setShowQuickConfigSnackbar(true);
-        }}
-        onOpenSettings={(e) => setDevSettingsAnchor(e.currentTarget)}
+        onOpenSettings={(e) => ui.setDevSettingsAnchor(e.currentTarget)}
       />
 
       <SettingsPopover
-        anchor={devSettingsAnchor}
-        onClose={() => setDevSettingsAnchor(null)}
-        baseUrl={baseUrl}
-        setBaseUrl={setBaseUrl}
+        anchor={ui.devSettingsAnchor}
+        onClose={() => ui.setDevSettingsAnchor(null)}
+        baseUrl={settings.baseUrl}
+        setBaseUrl={settings.setBaseUrl}
         inferenceProfileSummaries={inferenceProfileSummaries}
-        selectedModel={selectedModel}
-        onChangeModel={handleChangeModel}
-        enableSourcePanel={enableSourcePanel}
-        setEnableSourcePanel={setEnableSourcePanel}
-        enableSidebarSlider={enableSidebarSlider}
-        setEnableSidebarSlider={setEnableSidebarSlider}
-        hasWebDataSource={hasWebDataSource}
-        sourceUrlInfo={sourceUrlInfo}
-        handleUpdateUrls={handleUpdateUrls}
+        selectedModel={settings.selectedModel}
+        onChangeModel={settings.handleChangeModel}
+        enableSourcePanel={settings.enableSourcePanel}
+        setEnableSourcePanel={settings.setEnableSourcePanel}
+        enableSidebarSlider={settings.enableSidebarSlider}
+        setEnableSidebarSlider={settings.setEnableSidebarSlider}
+        hasWebDataSource={settings.hasWebDataSource}
+        sourceUrlInfo={settings.sourceUrlInfo}
+        handleUpdateUrls={settings.handleUpdateUrls}
         heightTier={heightTier}
-        onQuickConfig={() => {
-          const quickSetupUrl = "https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/";
-          setBaseUrl(quickSetupUrl);
-          
-          // Find Claude 3.5 Haiku model from inference profiles
-          const claudeModel = inferenceProfileSummaries.find(model => 
-            model.inferenceProfileId.includes('claude-3-5-haiku') || 
-            (model.inferenceProfileName.toLowerCase().includes('claude') && model.inferenceProfileName.toLowerCase().includes('3.5') && model.inferenceProfileName.toLowerCase().includes('haiku'))
-          );
-          
-          if (claudeModel) {
-            setSelectedModel(claudeModel);
-          }
-        }}
       />
 
       <NewChatConfirmation
-        anchor={popoverAnchor}
+        anchor={ui.popoverAnchor}
         onConfirm={handleConfirmNewChat}
-        onCancel={handleCancelNewChat}
+        onCancel={ui.handleCancelNewChat}
       />
 
       <NotificationSnackbars
-        showSnackbar={showSnackbar}
-        showQuickConfigSnackbar={showQuickConfigSnackbar}
-        onCloseSnackbar={handleCloseSnackbar}
-        onCloseQuickConfigSnackbar={handleCloseQuickConfigSnackbar}
+        showSnackbar={notifications.showSnackbar}
+        showQuickConfigSnackbar={notifications.showQuickConfigSnackbar}
+        onCloseSnackbar={notifications.handleCloseSnackbar}
+        onCloseQuickConfigSnackbar={notifications.handleCloseQuickConfigSnackbar}
       />
 
       {/* Full Screen Source Modal */}
       <FullScreenSourceModal
-        isOpen={fullScreenSource.isOpen}
-        onClose={handleCloseFullScreenSource}
-        content={fullScreenSource.content}
-        url={fullScreenSource.url}
-        title={fullScreenSource.title}
+        isOpen={ui.fullScreenSource.isOpen}
+        onClose={ui.handleCloseFullScreenSource}
+        content={ui.fullScreenSource.content}
+        url={ui.fullScreenSource.url}
+        title={ui.fullScreenSource.title}
       />
     </Box>
   );
