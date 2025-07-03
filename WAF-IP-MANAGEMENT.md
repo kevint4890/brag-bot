@@ -40,6 +40,11 @@ npm install
 
 ## 🎯 Usage
 
+### Additional Commands
+For advanced IP management:
+- `node scripts/manage-ip.js list` - View all whitelisted IPs with expiration times
+- `node scripts/manage-ip.js remove <index>` - Remove a specific IP by its index
+
 ### Starting Development
 ```bash
 cd frontend
@@ -84,7 +89,7 @@ const CONFIG = {
   AWS_REGION: 'us-east-2',
   DYNAMODB_TABLE: 'waf-ip-tracking',
   EXPIRATION_HOURS: 8,
-  MAX_IPS_PER_DEVELOPER: 2
+  MAX_IPS_PER_DEVELOPER: 3
 };
 ```
 
@@ -92,7 +97,7 @@ const CONFIG = {
 
 - **8-hour auto-expiration** - IPs automatically removed after 8 hours
 - **Individual IP tracking** - Only your specific IP is added (no subnets)
-- **Rate limiting** - Maximum 2 active IPs per developer
+- **Rate limiting** - Maximum 3 active IPs per developer
 - **Private IP blocking** - Won't add internal/private IP addresses
 - **Automatic cleanup** - Hourly Lambda removes expired IPs
 
@@ -210,6 +215,12 @@ node scripts/manage-ip.js add
 
 # Remove current IP  
 node scripts/manage-ip.js remove
+
+# List all whitelisted IPs
+node scripts/manage-ip.js list
+
+# Remove a specific IP by index
+node scripts/manage-ip.js remove 0  # Removes the IP at index 0
 ```
 
 ## 👥 Team Workflow
@@ -251,6 +262,45 @@ aws wafv2 get-ip-set \
 aws dynamodb scan --table-name waf-ip-tracking --region us-east-2
 ```
 
+## 📝 Advanced IP Management
+
+### Listing All Whitelisted IPs
+```bash
+cd frontend
+node scripts/manage-ip.js list
+```
+
+**What happens:**
+```
+📋 Listing all whitelisted IPs...
+
+Index | IP Address      | Developer      | Expires In | Expiration Time
+────────────────────────────────────────────────────────────────────────
+0     | 98.46.115.123   | john-developer | 7h         | 7/3/2025, 10:15:30 PM
+1     | 203.0.113.45    | jane-developer | 2h         | 7/3/2025, 5:20:45 PM
+2     | 198.51.100.22   | dev-user       | Expired    | 7/2/2025, 9:30:15 AM
+```
+
+### Removing a Specific IP by Index
+```bash
+cd frontend
+node scripts/manage-ip.js remove 1  # Removes the IP at index 1
+```
+
+**What happens:**
+```
+🗑️ Removing IP at index 1...
+ℹ Removing IP: 203.0.113.45 (jane-developer)
+✅ Removed IP from WAF allowlist
+✅ Removed IP tracking
+✅ Successfully removed IP 203.0.113.45
+```
+
+This feature is particularly useful for:
+- Team administrators who need to manage multiple developer IPs
+- Cleaning up expired IPs that haven't been automatically removed yet
+- Managing IPs for remote developers or testing environments
+
 ## 🔧 Advanced Usage
 
 ### Custom Expiration (Admins Only)
@@ -274,5 +324,5 @@ const CONFIG = {
 ---
 
 **Version**: 2.0 (npm-integrated)  
-**Last Updated**: June 30, 2025  
+**Last Updated**: July 3, 2025  
 **Compatibility**: Node.js 16+, AWS CLI v2, npm 8+
