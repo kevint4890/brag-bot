@@ -44,6 +44,7 @@ export const useChat = (baseUrl, selectedModel, sessionId, setSessionId) => {
           response: data.response,
           citation: data.citation,
           isLoading: false,
+          sessionId: data.sessionId
         };
         return updatedHistory;
       });
@@ -58,6 +59,7 @@ export const useChat = (baseUrl, selectedModel, sessionId, setSessionId) => {
             "Error generating an answer. Please check your browser console, WAF configuration, Bedrock model access, and Lambda logs for debugging the error.",
           citation: undefined,
           isLoading: false,
+          sessionId: sessionId
         };
         return updatedHistory;
       });

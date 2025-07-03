@@ -7,7 +7,10 @@ export const useSettings = () => {
     const saved = localStorage.getItem('baseUrl');
     return saved || undefined;
   });
-  const [sessionId, setSessionId] = useState(undefined);
+  const [sessionId, setSessionId] = useState(() => {
+    const saved = sessionStorage.getItem('session_id');
+    return saved || undefined;
+  });
   const [sourceUrlInfo, setSourceUrlInfo] = useState({
     exclusionFilters: [],
     inclusionFilters: [],
@@ -26,6 +29,13 @@ export const useSettings = () => {
       localStorage.setItem('baseUrl', baseUrl);
     }
   }, [baseUrl]);
+  
+  // Save sessionId to sessionStorage when it changes
+  useEffect(() => {
+    if (sessionId) {
+      sessionStorage.setItem('session_id', sessionId);
+    }
+  }, [sessionId]);
 
   // Fetch web source configuration when baseUrl changes
   useEffect(() => {
