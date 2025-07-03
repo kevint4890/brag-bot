@@ -2,6 +2,7 @@ import {
   Box,
   Typography,
   Avatar,
+  Fade,
   Chip,
   Grow,
   Paper,
@@ -105,6 +106,14 @@ const Chat = (props) => {
     }));
   };
 
+  const getSessionId = () => {
+    let sessionId = sessionStorage.getItem('session_id');
+    if (!sessionId) {
+      sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+      sessionStorage.setItem('session_id', sessionId);
+    }
+    return sessionId;
+  }
 
   const formatCitation = (citation) => {
     if (!citation) return null;

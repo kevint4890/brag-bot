@@ -12,7 +12,7 @@ const CONFIG = {
   AWS_REGION: 'us-east-2',
   DYNAMODB_TABLE: 'waf-ip-tracking',
   EXPIRATION_HOURS: 8,
-  MAX_IPS_PER_DEVELOPER: 2
+  MAX_IPS_PER_DEVELOPER: 3
 };
 
 // Initialize AWS clients
@@ -131,10 +131,12 @@ async function checkExistingIP(ip) {
       
       if (expiration > now) {
         const hoursRemaining = Math.ceil((expiration - now) / 3600);
+        const minutesRemaining = Math.ceil((expiration - now) % 3600 / 60);
         const expirationTime = new Date(expiration * 1000).toLocaleTimeString();
         return {
           exists: true,
           hoursRemaining,
+          minutesRemaining,
           expirationTime
         };
       }
@@ -321,7 +323,7 @@ async function addIP() {
     // Step 3: Check if IP already exists
     const existing = await checkExistingIP(currentIP);
     if (existing.exists) {
-      log.success(`IP already allowed (expires at ${existing.expirationTime}, ${existing.hoursRemaining}h remaining)`);
+      log.success(`IP already allowed (expires at ${existing.expirationTime}, ${existing.hoursRemaining}h ${existing.minutesRemaining}m remaining)`);
       return;
     }
     
