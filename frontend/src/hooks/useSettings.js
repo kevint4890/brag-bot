@@ -3,7 +3,10 @@ import { chatApi } from '../services/chatApi';
 
 export const useSettings = () => {
   const [selectedModel, setSelectedModel] = useState(undefined);
-  const [baseUrl, setBaseUrl] = useState(undefined);
+  const [baseUrl, setBaseUrl] = useState(() => {
+    const saved = localStorage.getItem('baseUrl');
+    return saved || undefined;
+  });
   const [sessionId, setSessionId] = useState(undefined);
   const [sourceUrlInfo, setSourceUrlInfo] = useState({
     exclusionFilters: [],
@@ -16,6 +19,13 @@ export const useSettings = () => {
     const saved = localStorage.getItem('enableSidebarSlider');
     return saved ? JSON.parse(saved) : false;
   });
+
+  // Save baseUrl to localStorage when it changes
+  useEffect(() => {
+    if (baseUrl) {
+      localStorage.setItem('baseUrl', baseUrl);
+    }
+  }, [baseUrl]);
 
   // Fetch web source configuration when baseUrl changes
   useEffect(() => {

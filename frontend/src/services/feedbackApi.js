@@ -1,24 +1,26 @@
 // Dedicated feedback API service - easy to replace with your coworker's implementation
 export const feedbackApi = {
   // Submit feedback with fallback to localStorage
-  async submitFeedback(feedbackData) {
+  async submitFeedback(feedbackData, baseUrl) {
     try {
-      // Try to submit to API endpoint
-      const baseUrl = window.location.origin.includes('localhost') 
-        ? 'https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/' 
-        : window.location.origin + '/api/';
+      // Use provided baseUrl if available
+      if (baseUrl) {
+          
+        const response = await fetch(baseUrl + 'feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(feedbackData),
+        });
         
-      const response = await fetch(baseUrl + 'feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(feedbackData),
-      });
-      
-      if (response.ok) {
-        console.log('Feedback submitted successfully:', feedbackData);
-        return { success: true, method: 'api' };
+        if (response.ok) {
+          console.log('Feedback submitted successfully:', feedbackData);
+          return { success: true, method: 'api' };
+        }
+      } else {
+        // Fallback for when baseUrl is not provided
+        console.log('No baseUrl provided, using fallback');
       }
     } catch (apiError) {
       console.log('API not available, logging feedback locally:', feedbackData);
