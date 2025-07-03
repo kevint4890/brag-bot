@@ -3,10 +3,15 @@ export const feedbackApi = {
   // Submit feedback with fallback to localStorage
   async submitFeedback(feedbackData, baseUrl) {
     try {
-      // Use provided baseUrl if available
-      if (baseUrl) {
+      // Try multiple sources for the baseUrl
+      // 1. Use the passed baseUrl parameter
+      // 2. Try to get from localStorage directly
+      const apiUrl = baseUrl || localStorage.getItem('baseUrl');
+      
+      if (apiUrl) {
+        console.log('Using API URL:', apiUrl);
           
-        const response = await fetch(baseUrl + 'feedback', {
+        const response = await fetch(apiUrl + 'feedback', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

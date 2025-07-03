@@ -23,6 +23,15 @@ export const useSettings = () => {
     return saved ? JSON.parse(saved) : false;
   });
 
+  // Wrapped setBaseUrl that updates localStorage
+  const setBaseUrlWithStorage = useCallback((url) => {
+    setBaseUrl(url);
+    if (url) {
+      localStorage.setItem('baseUrl', url);
+      console.log('baseUrl saved to localStorage:', url);
+    }
+  }, []);
+
   // Save baseUrl to localStorage when it changes
   useEffect(() => {
     if (baseUrl) {
@@ -87,7 +96,7 @@ export const useSettings = () => {
     
     // Actions
     setSelectedModel,
-    setBaseUrl,
+    setBaseUrl: setBaseUrlWithStorage,
     setSessionId,
     setEnableSourcePanel,
     setEnableSidebarSlider,
