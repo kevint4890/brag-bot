@@ -4,7 +4,10 @@ import { chatApi } from '../services/chatApi';
 export const useSettings = () => {
   const [selectedModel, setSelectedModel] = useState(undefined);
   const [baseUrl, setBaseUrl] = useState(undefined);
-  const [sessionId, setSessionId] = useState(undefined);
+  const [sessionId, setSessionId] = useState(() => {
+    const saved = sessionStorage.getItem('session_id');
+    return saved || undefined;
+  });
   const [sourceUrlInfo, setSourceUrlInfo] = useState({
     exclusionFilters: [],
     inclusionFilters: [],
@@ -16,6 +19,13 @@ export const useSettings = () => {
     const saved = localStorage.getItem('enableSidebarSlider');
     return saved ? JSON.parse(saved) : false;
   });
+
+  // Save sessionId to sessionStorage when it changes
+  useEffect(() => {
+    if (sessionId) {
+      sessionStorage.setItem('session_id', sessionId);
+    }
+  }, [sessionId]);
 
   // Fetch web source configuration when baseUrl changes
   useEffect(() => {
