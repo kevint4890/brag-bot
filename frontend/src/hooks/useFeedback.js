@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { feedbackApi } from '../services/feedbackApi';
+import { useSettings } from './useSettings';
 
 // Dedicated feedback hook - easy to replace with your coworker's implementation
 export const useFeedback = () => {
@@ -7,6 +8,7 @@ export const useFeedback = () => {
   const [detailedFeedback, setDetailedFeedback] = useState({});
   const [feedbackSubmitting, setFeedbackSubmitting] = useState({});
   const [closingFeedback, setClosingFeedback] = useState({});
+  const { baseUrl } = useSettings();
 
   // Get feedback configuration
   const config = feedbackApi.getConfig();
@@ -109,7 +111,7 @@ export const useFeedback = () => {
       };
 
       // Submit feedback using the dedicated API service
-      await feedbackApi.submitFeedback(feedbackData);
+      await feedbackApi.submitFeedback(feedbackData, baseUrl);
 
       // Mark as submitted
       setDetailedFeedback(prev => ({
