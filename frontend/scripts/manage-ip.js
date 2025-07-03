@@ -131,11 +131,13 @@ async function checkExistingIP(ip) {
       
       if (expiration > now) {
         const hoursRemaining = Math.ceil((expiration - now) / 3600);
+        const floorHours = Math.floor((expiration - now) / 3600);
         const minutesRemaining = Math.ceil((expiration - now) % 3600 / 60);
         const expirationTime = new Date(expiration * 1000).toLocaleTimeString();
         return {
           exists: true,
           hoursRemaining,
+          floorHours,
           minutesRemaining,
           expirationTime
         };
@@ -323,7 +325,11 @@ async function addIP() {
     // Step 3: Check if IP already exists
     const existing = await checkExistingIP(currentIP);
     if (existing.exists) {
-      log.success(`IP already allowed (expires at ${existing.expirationTime}, ${existing.hoursRemaining}h ${existing.minutesRemaining}m remaining)`);
+      if (existing.minutesRemaining === 60) {
+        log.success(`IP already allowed (expires at ${existing.expirationTime}, ${existing.hoursRemaining}h remaining)`);
+      } else {
+        log.success(`IP already allowed (expires at ${existing.expirationTime}, ${existing.floorHours}h ${existing.minutesRemaining}m remaining)`);
+      }
       return;
     }
     
