@@ -3,7 +3,10 @@ import { chatApi } from '../services/chatApi';
 
 export const useSettings = () => {
   const [selectedModel, setSelectedModel] = useState(undefined);
-  const [baseUrl, setBaseUrl] = useState(undefined);
+  const [baseUrl, setBaseUrl] = useState(() => {
+    const saved = localStorage.getItem('baseUrl');
+    return saved || undefined;
+  });
   const [sessionId, setSessionId] = useState(() => {
     const saved = sessionStorage.getItem('session_id');
     return saved || undefined;
@@ -20,6 +23,13 @@ export const useSettings = () => {
     return saved ? JSON.parse(saved) : false;
   });
 
+  // Save baseUrl to localStorage when it changes
+  useEffect(() => {
+    if (baseUrl) {
+      localStorage.setItem('baseUrl', baseUrl);
+    }
+  }, [baseUrl]);
+  
   // Save sessionId to sessionStorage when it changes
   useEffect(() => {
     if (sessionId) {
