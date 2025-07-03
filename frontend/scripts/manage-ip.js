@@ -82,9 +82,15 @@ async function getDeveloperName() {
   try {
     const command = new GetCallerIdentityCommand({});
     const response = await stsClient.send(command);
-    return response.Arn.split('/').pop() || 'unknown';
+    const awsUsername = response.Arn.split('/').pop();
+    if (awsUsername && awsUsername !== '') {
+      return awsUsername;
+    }
+    throw new Error('Could not determine AWS username');
   } catch (error) {
-    return 'unknown';
+    log.error('Failed to identify AWS user:' + error.message);
+    log.info('Run: aws configure or contact admin to set up credentials');
+    throw new Error('AWS credentials not configured properly');
   }
 }
 
