@@ -82,9 +82,15 @@ async function getDeveloperName() {
   try {
     const command = new GetCallerIdentityCommand({});
     const response = await stsClient.send(command);
-    return response.Arn.split('/').pop() || 'unknown';
+    const awsUsername = response.Arn.split('/').pop();
+    if (awsUsername && awsUsername !== '') {
+      return awsUsername;
+    }
+    throw new Error('Could not determine AWS username');
   } catch (error) {
-    return 'unknown';
+    log.error('Failed to identify AWS user:' + error.message);
+    log.info('Run: aws configure or contact admin to set up credentials');
+    throw new Error('AWS credentials not configured properly');
   }
 }
 
@@ -305,6 +311,119 @@ async function removeIPTracking(ip) {
 }
 
 /**
+ * List all IPs in the DynamoDB table
+ */
+async function listIPs() {
+  log.title('📋 Listing all whitelisted IPs...');
+  
+  try {
+    // Scan DynamoDB table for all entries
+    const command = new ScanCommand({
+      TableName: CONFIG.DYNAMODB_TABLE
+    });
+    
+    const response = await dynamodbClient.send(command);
+    
+    if (!response.Items || response.Items.length === 0) {
+      log.info('No IPs found in the whitelist');
+      return [];
+    }
+    
+    // Process and sort items
+    const now = Math.floor(Date.now() / 1000);
+    const items = response.Items.map(item => {
+      const expiration = parseInt(item.expiration_time.N);
+      const isExpired = expiration < now;
+      const timeRemaining = isExpired ? 0 : Math.ceil((expiration - now) / 3600);
+      
+      return {
+        ip: item.ip_address.S,
+        developer: item.developer_name.S,
+        expiration: new Date(expiration * 1000).toLocaleString(),
+        timeRemaining,
+        isExpired,
+        description: item.description?.S || 'No description'
+      };
+    }).sort((a, b) => a.isExpired === b.isExpired ? 
+      (a.timeRemaining - b.timeRemaining) : 
+      (a.isExpired ? 1 : -1));
+    
+    // Display results
+    console.log('\n' + chalk.bold('Index | IP Address      | Developer      | Expires In | Expiration Time'));
+    console.log(chalk.gray('─'.repeat(80)));
+    
+    items.forEach((item, index) => {
+      const status = item.isExpired ? 
+        chalk.red('Expired') : 
+        chalk.green(`${item.timeRemaining}h`);
+        
+      console.log(
+        chalk.cyan(String(index).padEnd(6)) + '| ' +
+        item.ip.padEnd(16) + '| ' +
+        item.developer.substring(0, 14).padEnd(15) + '| ' +
+        status.padEnd(21) + '| ' +
+        item.expiration
+      );
+    });
+    
+    console.log(''); // Empty line for readability
+    return items;
+  } catch (error) {
+    log.error(`Failed to list IPs: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Remove IP by index
+ */
+async function removeIPByIndex(index) {
+  log.title(`🗑️ Removing IP at index ${index}...`);
+  
+  try {
+    // Get list of IPs
+    const items = await listIPs();
+    
+    if (items.length === 0) {
+      log.warning('No IPs found to remove');
+      return;
+    }
+    
+    // Validate index
+    if (index < 0 || index >= items.length) {
+      log.error(`Invalid index: ${index}. Valid range: 0-${items.length - 1}`);
+      return;
+    }
+    
+    const targetIP = items[index];
+    log.info(`Removing IP: ${targetIP.ip} (${targetIP.developer})`);
+    
+    // Step 1: Get WAF IP Set ID
+    const ipSetId = await getWAFIPSetId();
+    
+    // Step 2: Remove from WAF
+    const wafResult = await removeIPFromWAF(targetIP.ip, ipSetId);
+    if (wafResult.notFound) {
+      log.info('IP not found in WAF IP set');
+    } else {
+      log.success('Removed IP from WAF allowlist');
+    }
+    
+    // Step 3: Remove tracking
+    const trackingResult = await removeIPTracking(targetIP.ip);
+    if (trackingResult.success) {
+      log.success('Removed IP tracking');
+    }
+    
+    log.success(`Successfully removed IP ${targetIP.ip}`);
+    
+  } catch (error) {
+    log.warning('Could not remove IP');
+    log.error(error.message);
+  }
+}
+
+/**
  * Add IP to allowlist
  */
 async function addIP() {
@@ -421,16 +540,26 @@ async function removeIP() {
  */
 async function main() {
   const command = process.argv[2];
+  const param = process.argv[3];
   
   switch (command) {
     case 'add':
       await addIP();
       break;
     case 'remove':
-      await removeIP();
+      if (param !== undefined && !isNaN(parseInt(param))) {
+        // Remove by index
+        await removeIPByIndex(parseInt(param));
+      } else {
+        // Remove current IP
+        await removeIP();
+      }
+      break;
+    case 'list':
+      await listIPs();
       break;
     default:
-      log.error('Usage: node manage-ip.js [add|remove]');
+      log.error('Usage: node manage-ip.js [add|remove|list|remove <index>]');
       process.exit(1);
   }
 }
@@ -443,4 +572,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { addIP, removeIP };
+module.exports = { addIP, removeIP, listIPs, removeIPByIndex };
