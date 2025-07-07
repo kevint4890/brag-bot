@@ -637,7 +637,7 @@ const App = (props) => {
       {/* Quick Access Button */}
       <IconButton
         onClick={() => {
-          const quickSetupUrl = "https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/";
+          const quickSetupUrl = "";
           setBaseUrl(quickSetupUrl);
           
           // Find Claude 3.5 Sonnet model from inference profiles
@@ -804,7 +804,7 @@ const App = (props) => {
             <Button
               variant="contained"
               onClick={() => {
-                const quickSetupUrl = "https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/";
+                const quickSetupUrl = "";
                 setBaseUrl(quickSetupUrl);
                 
                 // Find Claude 3.5 Sonnet model from inference profiles
