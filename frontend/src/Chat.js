@@ -253,7 +253,7 @@ const Chat = (props) => {
       console.log('Submitting feedback:', feedbackData);
       
       // API URL
-      const apiUrl = 'https://eogeslxp5e.execute-api.us-east-2.amazonaws.com/prod/feedback';
+      const apiUrl = '';
       console.log('API URL:', apiUrl);
 
       const response = await fetch(apiUrl, {
